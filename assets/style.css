@@ -145,6 +145,9 @@ main { flex: 1; }
 .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (max-width: 760px) { .card-grid { grid-template-columns: 1fr; } }
 
+.chart-legend { display: flex; gap: 16px; color: var(--text-secondary); font-size: .82rem; margin-bottom: 6px; }
+.chart-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+
 figure.chart { margin: 0; }
 figure.chart svg { display: block; width: 100%; height: auto; }
 .chart-table { margin-top: 10px; }

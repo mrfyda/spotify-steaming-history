@@ -57,19 +57,30 @@ const Report = (() => {
     if (a.empty) { body.appendChild(el('p', 'empty-note', 'No plays in this range.')); return; }
     const rangeLabel = currentYear == null ? 'all time' : String(currentYear);
 
+    // previous year, for last.fm-style vs-comparisons
+    const prev = currentYear != null ? Stats.aggregate(allPlays, { year: currentYear - 1 }) : null;
+    const hasPrev = prev && !prev.empty;
+    const delta = (cur, before) => {
+      if (!hasPrev || !before) return null;
+      const pct = (cur - before) / before;
+      if (!isFinite(pct)) return null;
+      const arrow = pct >= 0 ? '↑' : '↓';
+      return `${arrow} ${fmtPct(Math.abs(pct))} vs ${currentYear - 1}`;
+    };
+
     /* ---- overview KPIs ---- */
     const ov = section(body, 'Overview',
       `${fmtDate(a.firstTs)} – ${fmtDate(a.lastTs)} · streams are plays of 30 seconds or more`);
     const kpis = el('div', 'kpis');
     const kpi = (label, value, sub) => kpis.appendChild(el('div', 'kpi',
       `<div class="k-label">${esc(label)}</div><div class="k-value">${esc(value)}</div>${sub ? `<div class="k-sub">${esc(sub)}</div>` : ''}`));
-    kpi('Time listened', fmtMs(a.totalMs), fmtMsLong(a.totalMs));
-    kpi('Streams', fmtInt(a.streams), `${fmtInt(Math.round(a.streams / Math.max(1, a.activeDays)))} per active day`);
-    kpi('Artists', fmtInt(a.uniqueArtists));
-    kpi('Tracks', fmtInt(a.uniqueTracks));
-    kpi('Albums', fmtInt(a.uniqueAlbums));
-    kpi('Active days', fmtInt(a.activeDays), `of ${fmtInt(a.daySpan)} in range`);
-    if (a.podcastMs > 0) kpi('Podcast time', fmtMs(a.podcastMs), `${a.uniqueShows} shows`);
+    kpi('Time listened', fmtMs(a.totalMs), delta(a.totalMs, prev?.totalMs) || fmtMsLong(a.totalMs));
+    kpi('Streams', fmtInt(a.streams), delta(a.streams, prev?.streams) || `${fmtInt(Math.round(a.streams / Math.max(1, a.activeDays)))} per active day`);
+    kpi('Artists', fmtInt(a.uniqueArtists), delta(a.uniqueArtists, prev?.uniqueArtists));
+    kpi('Tracks', fmtInt(a.uniqueTracks), delta(a.uniqueTracks, prev?.uniqueTracks));
+    kpi('Albums', fmtInt(a.uniqueAlbums), delta(a.uniqueAlbums, prev?.uniqueAlbums));
+    kpi('Active days', fmtInt(a.activeDays), delta(a.activeDays, prev?.activeDays) || `of ${fmtInt(a.daySpan)} in range`);
+    if (a.podcastMs > 0) kpi('Podcast time', fmtMs(a.podcastMs), delta(a.podcastMs, prev?.podcastMs) || `${a.uniqueShows} shows`);
     ov.appendChild(kpis);
 
     /* ---- listening over time ---- */
@@ -80,16 +91,20 @@ const Report = (() => {
     const monthsCard = card(grid1, currentYear == null ? 'Hours per month' : `Hours per month, ${rangeLabel}`);
     monthsCard.style.gridColumn = '1 / -1';
     const monthData = buildMonthSeries(a);
+    const prevByMonth = m => hasPrev ? (prev.byMonth.get(`${currentYear - 1}-${m.key.slice(5)}`)?.ms || 0) / 3.6e6 : null;
     Charts.columnChart(monthsCard, monthData.map(m => ({
       label: m.short,
       value: m.ms / 3.6e6,
+      prev: prevByMonth(m),
       tipTitle: m.long,
-      tipSub: `${fmtMs(m.ms)} · ${fmtInt(m.plays)} streams`,
+      tipSub: `${fmtMs(m.ms)} · ${fmtInt(m.plays)} streams` +
+        (hasPrev ? ` · ${currentYear - 1}: ${fmtMs((prevByMonth(m) || 0) * 3.6e6)}` : ''),
     })), {
       formatValue: v => fmtInt(v),
       tickEvery: (i, label) => monthData[i].tick,
       ariaLabel: 'Hours listened per month',
       tableCols: ['Month', 'Listening'],
+      compare: hasPrev ? { labels: [String(currentYear), String(currentYear - 1)] } : null,
     });
 
     const clockCard = card(grid1, 'Listening clock', 'hours listened by time of day');
@@ -133,7 +148,8 @@ const Report = (() => {
     if (a.discoveryRate != null && monthData.length > 1) {
       const disc = section(body, 'Discovery',
         `${fmtPct(a.discoveryRate)} of your streams were tracks you'd never played before` +
-        (currentYear == null ? '' : ` · ${fmtInt(a.newArtists ?? 0)} new artists`));
+        (currentYear == null ? '' : ` · ${fmtInt(a.newArtists ?? 0)} new artists` +
+          (a.newArtistShare != null ? ` · ${fmtPct(a.newArtistShare)} of streams went to artists discovered this year` : '')));
       const dCard = card(disc, 'New music over time', 'share of each month’s streams that were first-time tracks');
       Charts.columnChart(dCard, monthData.map(m => ({
         label: m.short,
@@ -220,6 +236,7 @@ const Report = (() => {
 
     const habit = mkRecords(section(body, 'Habits'));
     habit('Average per active day', fmtMsLong(a.totalMs / Math.max(1, a.activeDays)), `${fmtPct(a.activeDays / a.daySpan)} of days had listening`);
+    habit('Busiest hour', `${fmtHour(a.peakHour)}–${fmtHour((a.peakHour + 1) % 24)}`, `${fmtPct(a.byHour[a.peakHour].ms / Math.max(1, a.totalMs))} of all listening`);
     if (a.sessions?.count > 1) habit('Listening sessions', fmtInt(a.sessions.count), `about ${fmtMsLong(a.sessions.avgMs)} each`);
     if (a.startChosenRate != null) habit('Plays you started yourself', fmtPct(a.startChosenRate), 'the rest flowed in from autoplay and queues');
     if (a.skipRate != null) habit('Skip rate', fmtPct(a.skipRate), a.mostSkipped ? `most skipped: “${a.mostSkipped.track}” (${a.mostSkipped.skips}×)` : null);
@@ -227,6 +244,21 @@ const Report = (() => {
     if (a.shuffleRate != null) habit('Shuffle', fmtPct(a.shuffleRate), 'of plays with shuffle on');
     if (a.offlineRate != null && a.offlineRate > 0) habit('Offline listening', fmtPct(a.offlineRate), 'of plays while offline');
     if (a.incognitoCount > 0) habit('Private sessions', fmtInt(a.incognitoCount) + ' plays', 'listened in incognito mode');
+
+    /* ---- recently played ---- */
+    const rangePlays = currentYear == null ? allPlays
+      : allPlays.filter(p => new Date(p.ts).getFullYear() === currentYear);
+    const recent = rangePlays.filter(p => p.ms >= Stats.STREAM_MS).slice(-15).reverse();
+    if (recent.length) {
+      const rs = section(body, 'Recently played', currentYear == null ? 'your last 15 streams' : `the last 15 streams of ${rangeLabel}`);
+      const c = card(rs);
+      c.innerHTML += `<table><tbody>${recent.map(p => `
+        <tr>
+          <td><div class="t-name">${esc(p.track || p.episode)}</div><div class="t-sub">${esc(p.kind === 'music' ? p.artist : p.show)}</div></td>
+          <td class="num">${fmtMs(p.ms)}</td>
+          <td class="num t-sub">${esc(new Date(p.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))} ${esc(new Date(p.ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase())}</td>
+        </tr>`).join('')}</tbody></table>`;
+    }
 
     /* ---- platforms & countries ---- */
     if (a.platforms.size || a.countries.size) {

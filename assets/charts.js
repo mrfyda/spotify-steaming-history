@@ -5,6 +5,7 @@
 const Charts = (() => {
 
   const MARK = '#2a78d6';
+  const COMPARE = '#d3d1c9'; // de-emphasis gray for a previous-period series
   const SEQ = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95']; // light→dark blue ramp (light surface)
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -61,12 +62,15 @@ const Charts = (() => {
     const padL = 44, padR = 8, padT = 12, padB = 24;
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const n = data.length || 1;
-    const maxV = niceMax(Math.max(...data.map(d => d.value), 0));
+    const compare = !!opts.compare && data.some(d => d.prev != null);
+    const maxV = niceMax(Math.max(...data.map(d => Math.max(d.value, d.prev || 0)), 0));
     const fmt = opts.formatValue || (v => v.toLocaleString('en-US'));
 
     const slot = plotW / n;
     const gap = Math.max(2, Math.min(6, slot * 0.25));          // ≥2px surface gap
-    const barW = Math.max(1.5, Math.min(24, slot - gap));       // ≤24px thick
+    const barW = compare
+      ? Math.max(1.5, Math.min(11, (slot - gap) / 2 - 1))
+      : Math.max(1.5, Math.min(24, slot - gap));                // ≤24px thick
 
     const svgNS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(svgNS, 'svg');
@@ -96,11 +100,20 @@ const Charts = (() => {
     }
 
     data.forEach((d, i) => {
-      const x = padL + slot * i + (slot - barW) / 2;
+      const pairW = compare ? barW * 2 + 2 : barW;
+      const x0 = padL + slot * i + (slot - pairW) / 2;
+      const g = document.createElementNS(svgNS, 'g');
+
+      if (compare && d.prev > 0) {
+        const ph = (d.prev / maxV) * plotH;
+        const p = document.createElementNS(svgNS, 'path');
+        p.setAttribute('d', colPath(x0, padT + plotH - ph, barW, ph));
+        p.setAttribute('fill', COMPARE);
+        g.appendChild(p);
+      }
+      const x = compare ? x0 + barW + 2 : x0;
       const h = maxV ? (d.value / maxV) * plotH : 0;
       const y = padT + plotH - h;
-
-      const g = document.createElementNS(svgNS, 'g');
       if (h > 0) {
         const p = document.createElementNS(svgNS, 'path');
         p.setAttribute('d', colPath(x, y, barW, h));
@@ -128,6 +141,16 @@ const Charts = (() => {
       }
     });
 
+    // two series → a legend is required
+    if (compare && opts.compare.labels) {
+      const [curLab, prevLab] = opts.compare.labels;
+      const legend = document.createElement('div');
+      legend.className = 'chart-legend';
+      legend.innerHTML = `<span><i style="background:${MARK}"></i>${esc(curLab)}</span>` +
+        `<span><i style="background:${COMPARE}"></i>${esc(prevLab)}</span>`;
+      container.appendChild(legend);
+    }
+
     const fig = document.createElement('figure');
     fig.className = 'chart';
     fig.appendChild(svg);
@@ -139,9 +162,10 @@ const Charts = (() => {
       det.className = 'chart-table';
       det.innerHTML = `<summary>View as table</summary>`;
       const table = document.createElement('table');
+      const prevHead = compare && opts.compare.labels ? `<th class="num">${esc(opts.compare.labels[1])}</th>` : '';
       table.innerHTML =
-        `<thead><tr><th>${esc(opts.tableCols[0])}</th><th class="num">${esc(opts.tableCols[1])}</th></tr></thead>` +
-        `<tbody>${data.map(d => `<tr><td>${esc(d.tipTitle ?? d.label)}</td><td class="num">${esc(d.tipSub ?? fmt(d.value))}</td></tr>`).join('')}</tbody>`;
+        `<thead><tr><th>${esc(opts.tableCols[0])}</th><th class="num">${esc(opts.tableCols[1])}</th>${prevHead}</tr></thead>` +
+        `<tbody>${data.map(d => `<tr><td>${esc(d.tipTitle ?? d.label)}</td><td class="num">${esc(d.tipSub ?? fmt(d.value))}</td>${prevHead ? `<td class="num">${esc(fmt(d.prev || 0))}</td>` : ''}</tr>`).join('')}</tbody>`;
       det.appendChild(table);
       container.appendChild(det);
     }

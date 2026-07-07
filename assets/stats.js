@@ -257,6 +257,16 @@ const Stats = (() => {
     a.startChosenRate = a.startKnown ? a.startChosen / a.startKnown : null;
     a.discoveryRate = a.musicStreams ? a.newTracksTotal / a.musicStreams : null;
 
+    // share of music streams that went to artists first discovered in this range
+    if (year != null) {
+      let newArtistStreams = 0;
+      for (const [artist, e] of a.byArtist) {
+        const first = artistFirst.get(artist);
+        if (first != null && new Date(first).getFullYear() === year) newArtistStreams += e.plays;
+      }
+      a.newArtistShare = a.musicStreams ? newArtistStreams / a.musicStreams : null;
+    }
+
     // most-rewound track (reason_start === backbtn)
     let replay = null;
     for (const e of a.byTrack.values()) {
