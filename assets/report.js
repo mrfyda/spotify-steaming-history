@@ -12,10 +12,13 @@ const Report = (() => {
     renderFilters(allPlays);
     renderBody(allPlays);
 
-    // keep the UI in sync with a background enrichment run
+    // keep the UI in sync with a background enrichment run:
+    // re-render on start (instant feedback), after the quick burst (artwork
+    // appears within seconds), then periodically and at the end
     Enrich.setOnUpdate(s => {
       if (document.getElementById('report').hidden) return;
-      if (!s.running || s.done === s.total || (s.done > 0 && s.done % 60 === 0)) {
+      const milestone = !s.running || s.done === s.total || s.done === 0 || s.done === 30 || s.done % 120 === 0;
+      if (milestone) {
         const y = window.scrollY;
         renderBody(allPlays);
         window.scrollTo(0, y);
@@ -184,7 +187,7 @@ const Report = (() => {
         currentYear == null ? 'the artist who defined each year' : 'the artist who defined each month');
       const eCard = card(erasSec);
       const maxEra = Math.max(...a.eras.map(e => e.ms), 1);
-      eCard.innerHTML += `<table><thead><tr><th>${currentYear == null ? 'Year' : 'Month'}</th><th>Artist</th><th></th><th class="num">Time</th></tr></thead>
+      eCard.innerHTML += `<table><thead><tr><th>${currentYear == null ? 'Year' : 'Month'}</th><th>Artist</th><th class="t-bar-wrap"></th><th class="num">Time</th></tr></thead>
         <tbody>${a.eras.map(e => `
           <tr>
             <td class="rank" style="width:60px">${currentYear == null ? esc(e.period) : esc(MONTH_SHORT[Number(e.period.slice(5)) - 1])}</td>
@@ -360,7 +363,7 @@ const Report = (() => {
           <td class="num">${fmtMs(e.ms)}</td>
         </tr>`).join('');
       tableWrap.innerHTML = `<table>
-        <thead><tr><th></th><th>Name</th>${spark ? `<th class="spark-cell">${esc(sparkTitle || '')}</th>` : ''}<th></th><th class="num">Streams</th><th class="num">Time</th></tr></thead>
+        <thead><tr><th></th><th>Name</th>${spark ? `<th class="spark-cell">${esc(sparkTitle || '')}</th>` : ''}<th class="t-bar-wrap"></th><th class="num">Streams</th><th class="num">Time</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="${cols}" class="empty-note">No matches.</td></tr>`}</tbody>
       </table>`;
       more.hidden = shown >= filtered.length;
@@ -429,7 +432,7 @@ const Report = (() => {
       rows.push([`Other (${fmtInt(tail.length)} genres)`, tail.reduce((sum, [, ms]) => sum + ms, 0)]);
     }
     const maxMs = rows[0][1];
-    c.innerHTML += `<table><thead><tr><th>Genre</th><th></th><th class="num">Share</th><th class="num">Time</th></tr></thead>
+    c.innerHTML += `<table><thead><tr><th>Genre</th><th class="t-bar-wrap"></th><th class="num">Share</th><th class="num">Time</th></tr></thead>
       <tbody>${rows.map(([g, ms]) => `
         <tr>
           <td class="t-name">${esc(g)}</td>
@@ -441,7 +444,7 @@ const Report = (() => {
 
   function shareTable(entries, totalMs, label) {
     const t = document.createElement('table');
-    t.innerHTML = `<thead><tr><th>Name</th><th></th><th class="num">Share</th><th class="num">Time</th></tr></thead>
+    t.innerHTML = `<thead><tr><th>Name</th><th class="t-bar-wrap"></th><th class="num">Share</th><th class="num">Time</th></tr></thead>
       <tbody>${entries.map(e => `
         <tr>
           <td class="t-name">${esc(label(e.key))}</td>

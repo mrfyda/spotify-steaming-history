@@ -112,8 +112,8 @@ main { flex: 1; }
 
 .filter-row {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-  padding: 8px 0 18px; position: sticky; top: 54px; z-index: 40;
-  background: linear-gradient(var(--bg) 80%, transparent);
+  padding: 8px 0 12px; position: sticky; top: 64px; z-index: 40;
+  background: var(--bg); border-bottom: 1px solid var(--grid); margin-bottom: 8px;
 }
 .chip {
   background: var(--surface-2); color: var(--text-secondary);
@@ -278,10 +278,18 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
 }
 
 @media (max-width: 640px) {
-  .topbar { padding: 10px 14px; flex-wrap: wrap; }
+  .topbar { padding: 10px 14px; }
   .brand { font-size: .95rem; }
+  /* once the views are loaded the tabs are the identity; reclaim the row */
+  .topbar:has(.tabs:not([hidden])) .brand { display: none; }
   #report { padding: 16px 14px 60px; }
-  .filter-row { top: 46px; }
+  .filter-row {
+    top: 58px;
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .filter-row::-webkit-scrollbar { display: none; }
+  .filter-row .chip { flex: none; }
   th, td { padding: 6px; }
   .t-bar-wrap { display: none; }
   .spark-cell { display: none; }
