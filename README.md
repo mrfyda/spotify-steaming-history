@@ -2,6 +2,12 @@
 
 A quiet, content-first report for your Spotify streaming history export.
 
+**Live: [mrfyda.github.io/spotify-steaming-history](https://mrfyda.github.io/spotify-steaming-history/)** — or try it with the built-in sample data.
+
+![The full report](docs/report.png)
+
+![The shareable yearly recap](docs/wrapped.png)
+
 Drop your Spotify data export zip on the page and get:
 
 - **Full report** — an exhaustive, last.fm-style breakdown: overview stats, listening

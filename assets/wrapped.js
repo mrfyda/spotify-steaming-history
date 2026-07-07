@@ -108,19 +108,36 @@ const Wrapped = (() => {
       <p class="s-sub">Your ${selectedYear}, as one image. Save it, or send it to the group chat.</p>
       <img class="share-preview" id="sharePreview" alt="Preview of your shareable recap card">
       <div class="share-actions">
-        <button class="btn" id="downloadCard">Download image</button>
+        <button class="btn" id="downloadCard">Download story</button>
+        <button class="btn secondary" id="downloadSquare">Download square</button>
         <button class="btn secondary" id="shareCard" hidden>Share…</button>
+        <button class="btn secondary" id="copyLink">Copy link</button>
       </div>`);
 
-    const canvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p);
+    const canvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'story');
+    const squareCanvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'square');
     const preview = shareSlide.querySelector('#sharePreview');
     preview.src = canvas.toDataURL('image/png');
 
-    shareSlide.querySelector('#downloadCard').addEventListener('click', () => {
+    const download = (cv, name) => {
       const link = document.createElement('a');
-      link.download = `spotify-wrapped-${selectedYear}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.download = name;
+      link.href = cv.toDataURL('image/png');
       link.click();
+    };
+    shareSlide.querySelector('#downloadCard').addEventListener('click', () =>
+      download(canvas, `my-${selectedYear}-in-music-story.png`));
+    shareSlide.querySelector('#downloadSquare').addEventListener('click', () =>
+      download(squareCanvas, `my-${selectedYear}-in-music.png`));
+
+    const copyBtn = shareSlide.querySelector('#copyLink');
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(
+          `My ${selectedYear} in music. Make yours at ${location.origin + location.pathname}`);
+        copyBtn.textContent = 'Copied ✓';
+        setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 1600);
+      } catch { copyBtn.textContent = location.origin + location.pathname; }
     });
 
     const shareBtn = shareSlide.querySelector('#shareCard');
@@ -191,8 +208,9 @@ const Wrapped = (() => {
     return (location.host + location.pathname).replace(/\/$/, '');
   }
 
-  /* ---- 1080×1920 share card ---- */
-  function drawShareCard(a, topArtists, topTracks, p) {
+  /* ---- share cards: 1080×1920 story, 1080×1080 square ---- */
+  function drawShareCard(a, topArtists, topTracks, p, format = 'story') {
+    if (format === 'square') return drawSquareCard(a, topArtists, topTracks, p);
     const W = 1080, H = 1920;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
@@ -277,6 +295,74 @@ const Wrapped = (() => {
     ctx.fillStyle = ACCENT;
     ctx.font = `600 32px ${sans}`;
     ctx.fillText(siteUrl(), W / 2, H - 76);
+
+    return canvas;
+  }
+
+  function drawSquareCard(a, topArtists, topTracks, p) {
+    const W = 1080, H = 1080;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    const INK = '#0b0b0b', SECONDARY = '#52514e', MUTED = '#898781', ACCENT = '#1c5cab';
+    ctx.fillStyle = '#fcfcfb';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(11,11,11,0.14)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(26, 26, W - 52, H - 52);
+
+    const sans = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+    const ellipsize = (text, maxW) => {
+      let t = String(text);
+      while (ctx.measureText(t).width > maxW && t.length > 1) t = t.slice(0, -2) + '…';
+      return t;
+    };
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = MUTED;
+    ctx.font = `600 34px ${sans}`;
+    ctx.fillText('My year in music', W / 2, 118);
+    ctx.fillStyle = INK;
+    ctx.font = `800 150px ${sans}`;
+    ctx.fillText(String(a.year), W / 2, 265);
+    ctx.fillStyle = ACCENT;
+    ctx.font = `800 72px ${sans}`;
+    ctx.fillText(`${fmtInt(a.totalMs / 60000)} minutes`, W / 2, 375);
+    ctx.fillStyle = SECONDARY;
+    ctx.font = `500 32px ${sans}`;
+    ctx.fillText(`${fmtInt(a.streams)} streams · ${fmtInt(a.uniqueArtists)} artists · ${fmtInt(a.activeDays)} days`, W / 2, 428);
+
+    const colY = 540, lineH = 60;
+    const drawList = (title, items, x, colW) => {
+      ctx.textAlign = 'left';
+      ctx.fillStyle = MUTED;
+      ctx.font = `600 28px ${sans}`;
+      ctx.fillText(title, x, colY);
+      items.slice(0, 4).forEach((label, i) => {
+        const y = colY + 58 + i * lineH;
+        ctx.fillStyle = i === 0 ? ACCENT : '#b0aea6';
+        ctx.font = `800 34px ${sans}`;
+        ctx.fillText(String(i + 1), x, y);
+        ctx.fillStyle = i === 0 ? INK : SECONDARY;
+        ctx.font = `${i === 0 ? 800 : 600} 34px ${sans}`;
+        ctx.fillText(ellipsize(label, colW - 50), x + 42, y);
+      });
+    };
+    drawList('Top artists', topArtists.map(e => e.key), 90, 450);
+    drawList('Top songs', topTracks.map(e => e.track), 560, 450);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = MUTED;
+    ctx.font = `600 28px ${sans}`;
+    ctx.fillText('Listening personality', W / 2, 890);
+    ctx.fillStyle = INK;
+    ctx.font = `800 56px ${sans}`;
+    ctx.fillText(`${p.emoji} ${p.name}`, W / 2, 958);
+
+    ctx.fillStyle = ACCENT;
+    ctx.font = `600 28px ${sans}`;
+    ctx.fillText(siteUrl(), W / 2, H - 62);
 
     return canvas;
   }

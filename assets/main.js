@@ -89,6 +89,32 @@
     if (!landing.hidden) handleFiles(e.dataTransfer.files);
   });
 
+  /* ---------- calendar reminder for the export wait ---------- */
+  $('icsBtn').addEventListener('click', () => {
+    const start = new Date(Date.now() + 14 * 86400000);
+    start.setHours(18, 0, 0, 0);
+    const end = new Date(start.getTime() + 30 * 60000);
+    const stamp = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    const url = location.origin + location.pathname;
+    const ics = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//listening-history//EN',
+      'BEGIN:VEVENT',
+      `UID:${stamp(start)}@listening-history`,
+      `DTSTAMP:${stamp(new Date())}`,
+      `DTSTART:${stamp(start)}`,
+      `DTEND:${stamp(end)}`,
+      'SUMMARY:Check if your Spotify data export arrived',
+      `DESCRIPTION:Spotify should have emailed your streaming history by now. Drop the zip at ${url} to explore it.`,
+      `URL:${url}`,
+      'END:VEVENT', 'END:VCALENDAR',
+    ].join('\r\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+    link.download = 'spotify-export-reminder.ics';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+
   /* ---------- sample data ---------- */
   $('sampleBtn').addEventListener('click', async () => {
     dropError.hidden = true;
