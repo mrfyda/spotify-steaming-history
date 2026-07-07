@@ -166,13 +166,17 @@ const Report = (() => {
     }
 
     /* ---- top lists ---- */
-    topList(body, 'Top artists', top(a.byArtist, 'ms'), {
+    const artistEntries = top(a.byArtist, 'ms');
+    const artistSection = topList(body, 'Top artists', artistEntries, {
       name: e => e.key,
-      sub: e => `${fmtInt(e.tracks || 0)} tracks`,
+      sub: e => [Enrich.get(e.key)?.g, `${fmtInt(e.tracks || 0)} tracks`].filter(Boolean).join(' · '),
+      art: e => Enrich.get(e.key)?.a,
       spark: e => e.series,
       sparkTitle: currentYear == null ? 'Trend by year' : 'Trend by month',
       rangeLabel,
     });
+    enrichControls(artistSection, artistEntries, allPlays);
+    genresSection(body, artistEntries);
     topList(body, 'Top tracks', top(a.byTrack, 'plays'), {
       name: e => e.track,
       sub: e => e.artist,
@@ -268,7 +272,7 @@ const Report = (() => {
   }
 
   /* generic searchable, expandable top list */
-  function topList(parent, title, entries, { name, sub, sortBy = 'ms', rangeLabel, spark, sparkTitle }) {
+  function topList(parent, title, entries, { name, sub, sortBy = 'ms', rangeLabel, spark, sparkTitle, art }) {
     const s = section(parent, title, `${fmtInt(entries.length)} total · ${rangeLabel}`);
     const c = card(s);
 
@@ -295,7 +299,7 @@ const Report = (() => {
       const rows = filtered.slice(0, shown).map((e, i) => `
         <tr>
           <td class="rank">${filtered === entries ? i + 1 : ''}</td>
-          <td><div class="t-name">${esc(name(e))}</div>${sub ? `<div class="t-sub">${esc(sub(e))}</div>` : ''}</td>
+          <td><div class="t-cell">${art && art(e) ? `<img class="t-art" src="${esc(art(e))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<div><div class="t-name">${esc(name(e))}</div>${sub ? `<div class="t-sub">${esc(sub(e))}</div>` : ''}</div></div></td>
           ${spark ? `<td class="spark-cell">${Charts.sparklineHTML(spark(e))}</td>` : ''}
           <td class="t-bar-wrap"><div class="t-bar-track"><div class="t-bar" style="width:${Math.max(1, Math.round((e[sortBy] / maxMs) * 100))}%"></div></div></td>
           <td class="num">${fmtInt(e.plays)}</td>
@@ -319,6 +323,49 @@ const Report = (() => {
     });
     more.addEventListener('click', () => { shown += 50; draw(); });
     draw();
+    return s;
+  }
+
+  /* opt-in iTunes enrichment (genre + artwork) for the top artists */
+  function enrichControls(sectionEl, artistEntries, allPlays) {
+    const names = artistEntries.map(e => e.key);
+    if (!Enrich.pending(names).length) return; // everything cached already
+    const bar = el('div', 'enrich-bar',
+      `<button class="chip" id="enrichBtn">Add genres &amp; artwork</button>
+       <span class="enrich-note">Looks up your top ${Enrich.TOP_N} artists on Apple's iTunes Search API.
+       Only the artist names are sent; nothing about your listening leaves the browser.</span>`);
+    sectionEl.insertBefore(bar, sectionEl.querySelector('.card'));
+    const btn = bar.querySelector('#enrichBtn');
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      await Enrich.run(names, (done, total) => { btn.textContent = `Fetching… ${done}/${total}`; });
+      renderBody(allPlays);
+    });
+  }
+
+  /* genre share across enriched artists, weighted by listening time */
+  function genresSection(parent, artistEntries) {
+    const byGenre = new Map();
+    let coveredMs = 0, coveredArtists = 0;
+    for (const e of artistEntries.slice(0, Enrich.TOP_N)) {
+      const g = Enrich.get(e.key)?.g;
+      if (!g) continue;
+      byGenre.set(g, (byGenre.get(g) || 0) + e.ms);
+      coveredMs += e.ms; coveredArtists++;
+    }
+    if (byGenre.size < 2) return;
+    const s = section(parent, 'Genres', `from your top ${coveredArtists} artists, via iTunes`);
+    const c = card(s);
+    const rows = [...byGenre.entries()].sort((x, y) => y[1] - x[1]);
+    const maxMs = rows[0][1];
+    c.innerHTML += `<table><thead><tr><th>Genre</th><th></th><th class="num">Share</th><th class="num">Time</th></tr></thead>
+      <tbody>${rows.map(([g, ms]) => `
+        <tr>
+          <td class="t-name">${esc(g)}</td>
+          <td class="t-bar-wrap"><div class="t-bar-track"><div class="t-bar" style="width:${Math.max(1, Math.round((ms / maxMs) * 100))}%"></div></div></td>
+          <td class="num">${fmtPct(ms / coveredMs)}</td>
+          <td class="num">${fmtMs(ms)}</td>
+        </tr>`).join('')}</tbody></table>`;
   }
 
   function shareTable(entries, totalMs, label) {
