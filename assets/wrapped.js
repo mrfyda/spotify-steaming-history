@@ -130,7 +130,11 @@ const Wrapped = (() => {
         if (navigator.canShare({ files: [file] })) {
           shareBtn.hidden = false;
           shareBtn.addEventListener('click', () =>
-            navigator.share({ files: [file], title: `My ${selectedYear} in music` }).catch(() => {}));
+            navigator.share({
+              files: [file],
+              title: `My ${selectedYear} in music`,
+              text: `My ${selectedYear} in music. Make yours at ${location.origin + location.pathname}`,
+            }).catch(() => {}));
         }
       });
     }
@@ -180,6 +184,11 @@ const Wrapped = (() => {
     if (a.firstTrack) facts.push(`Your year opened with <b>“${esc(a.firstTrack.track)}”</b> by ${esc(a.firstTrack.artist)}.`);
     if (a.podcastMs > 3.6e6) facts.push(`Plus <b>${fmtMs(a.podcastMs)}</b> of podcasts on the side.`);
     return facts.slice(0, 6);
+  }
+
+  /* host + path without protocol, e.g. "mrfyda.github.io/spotify-steaming-history" */
+  function siteUrl() {
+    return (location.host + location.pathname).replace(/\/$/, '');
   }
 
   /* ---- 1080×1920 share card ---- */
@@ -264,7 +273,10 @@ const Wrapped = (() => {
     // footer
     ctx.fillStyle = MUTED;
     ctx.font = `500 30px ${sans}`;
-    ctx.fillText('made from my full streaming history', W / 2, H - 84);
+    ctx.fillText('made from my full streaming history', W / 2, H - 124);
+    ctx.fillStyle = ACCENT;
+    ctx.font = `600 32px ${sans}`;
+    ctx.fillText(siteUrl(), W / 2, H - 76);
 
     return canvas;
   }
