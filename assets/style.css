@@ -171,6 +171,7 @@ figure.chart svg { display: block; width: 100%; height: auto; }
 /* enrichment */
 .t-cell { display: flex; align-items: center; gap: 10px; }
 .t-art { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; background: var(--surface-3); flex: none; }
+.t-art--ph { background: var(--surface-3); }
 .enrich-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .enrich-note { color: var(--text-muted); font-size: .82rem; max-width: 560px; }
 #enrichBtn:disabled { opacity: .6; cursor: default; }

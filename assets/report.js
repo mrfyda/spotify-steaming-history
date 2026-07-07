@@ -296,10 +296,19 @@ const Report = (() => {
 
     function draw() {
       const cols = 5 + (spark ? 1 : 0);
+      // once any row has artwork, every row reserves the slot so names stay aligned
+      const anyArt = art && filtered.slice(0, shown).some(e => art(e));
+      const artCell = e => {
+        if (!anyArt) return '';
+        const src = art(e);
+        return src
+          ? `<img class="t-art" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+          : '<div class="t-art t-art--ph"></div>';
+      };
       const rows = filtered.slice(0, shown).map((e, i) => `
         <tr>
           <td class="rank">${filtered === entries ? i + 1 : ''}</td>
-          <td><div class="t-cell">${art && art(e) ? `<img class="t-art" src="${esc(art(e))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<div><div class="t-name">${esc(name(e))}</div>${sub ? `<div class="t-sub">${esc(sub(e))}</div>` : ''}</div></div></td>
+          <td><div class="t-cell">${artCell(e)}<div><div class="t-name">${esc(name(e))}</div>${sub ? `<div class="t-sub">${esc(sub(e))}</div>` : ''}</div></div></td>
           ${spark ? `<td class="spark-cell">${Charts.sparklineHTML(spark(e))}</td>` : ''}
           <td class="t-bar-wrap"><div class="t-bar-track"><div class="t-bar" style="width:${Math.max(1, Math.round((e[sortBy] / maxMs) * 100))}%"></div></div></td>
           <td class="num">${fmtInt(e.plays)}</td>

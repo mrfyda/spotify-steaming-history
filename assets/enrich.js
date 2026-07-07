@@ -6,7 +6,7 @@
  */
 const Enrich = (() => {
 
-  const CACHE_KEY = 'lh-artist-meta-v1';
+  const CACHE_KEY = 'lh-artist-meta-v2'; // v1 cached misses from a too-strict matcher
   const TOP_N = 30;
 
   let store = {};
@@ -30,15 +30,27 @@ const Enrich = (() => {
     });
   }
 
+  /* fold case + diacritics so "ROSALÍA" matches "Rosalía" */
+  const norm = s => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+  /* does an iTunes artist credit ("Elton John & Dua Lipa", "X feat. Y") include this artist? */
+  function creditMatches(credit, name) {
+    const target = norm(name);
+    if (!target) return false;
+    if (norm(credit) === target) return true;
+    return credit.split(/\s*(?:&|,|\bfeat\.?\b|\bwith\b|\bx\b)\s*/i).some(part => norm(part) === target);
+  }
+
   /** Look up one artist. Returns {g: genre, a: artworkUrl} — empty object on miss. */
   async function fetchArtist(name) {
-    const url = 'https://itunes.apple.com/search?media=music&entity=album&attribute=artistTerm&limit=1'
+    const url = 'https://itunes.apple.com/search?media=music&entity=album&attribute=artistTerm&limit=5'
       + `&term=${encodeURIComponent(name)}`;
     const res = await jsonp(url);
-    const hit = res?.results?.[0];
+    const results = res?.results || [];
+    // prefer an exact solo credit; fall back to a collab credit that includes the artist
+    const hit = results.find(r => norm(r.artistName) === norm(name))
+      || results.find(r => creditMatches(r.artistName || '', name));
     if (!hit) return {};
-    // only trust an exact-ish artist match; a fuzzy hit means wrong artwork
-    if ((hit.artistName || '').trim().toLowerCase() !== name.trim().toLowerCase()) return {};
     return {
       g: hit.primaryGenreName || undefined,
       a: hit.artworkUrl100 ? hit.artworkUrl100.replace('100x100', '120x120') : undefined,
