@@ -189,18 +189,13 @@ const Wrapped = (() => {
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
 
-    // background
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#123c22');
-    bg.addColorStop(0.55, '#0d0d0d');
-    bg.addColorStop(1, '#0d0d0d');
-    ctx.fillStyle = bg;
+    // quiet paper background with a hairline frame
+    const INK = '#0b0b0b', SECONDARY = '#52514e', MUTED = '#898781', ACCENT = '#1c5cab';
+    ctx.fillStyle = '#fcfcfb';
     ctx.fillRect(0, 0, W, H);
-    const glow = ctx.createRadialGradient(W / 2, 180, 50, W / 2, 180, 700);
-    glow.addColorStop(0, 'rgba(29,185,84,0.35)');
-    glow.addColorStop(1, 'rgba(29,185,84,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, W, 900);
+    ctx.strokeStyle = 'rgba(11,11,11,0.14)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(30, 30, W - 60, H - 60);
 
     const sans = 'system-ui, -apple-system, "Segoe UI", sans-serif';
     const ellipsize = (text, maxW) => {
@@ -211,34 +206,34 @@ const Wrapped = (() => {
 
     // header
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillStyle = MUTED;
     ctx.font = `600 40px ${sans}`;
-    ctx.fillText('My year in music', W / 2, 140);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillText('My year in music', W / 2, 150);
+    ctx.fillStyle = INK;
     ctx.font = `800 190px ${sans}`;
-    ctx.fillText(String(a.year), W / 2, 330);
+    ctx.fillText(String(a.year), W / 2, 340);
 
     // minutes
-    ctx.fillStyle = '#1DB954';
-    ctx.font = `800 96px ${sans}`;
-    ctx.fillText(`${fmtInt(a.totalMs / 60000)} minutes`, W / 2, 480);
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillStyle = ACCENT;
+    ctx.font = `800 92px ${sans}`;
+    ctx.fillText(`${fmtInt(a.totalMs / 60000)} minutes`, W / 2, 485);
+    ctx.fillStyle = SECONDARY;
     ctx.font = `500 38px ${sans}`;
-    ctx.fillText(`${fmtInt(a.streams)} streams · ${fmtInt(a.uniqueArtists)} artists · ${fmtInt(a.activeDays)} days`, W / 2, 545);
+    ctx.fillText(`${fmtInt(a.streams)} streams · ${fmtInt(a.uniqueArtists)} artists · ${fmtInt(a.activeDays)} days`, W / 2, 548);
 
     // two columns of top-5s
     const colY = 680, lineH = 78;
     const drawList = (title, items, x, colW) => {
       ctx.textAlign = 'left';
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.fillStyle = MUTED;
       ctx.font = `600 32px ${sans}`;
       ctx.fillText(title, x, colY);
       items.slice(0, 5).forEach((label, i) => {
         const y = colY + 70 + i * lineH;
-        ctx.fillStyle = i === 0 ? '#1DB954' : 'rgba(255,255,255,0.45)';
+        ctx.fillStyle = i === 0 ? ACCENT : '#b0aea6';
         ctx.font = `800 40px ${sans}`;
         ctx.fillText(String(i + 1), x, y);
-        ctx.fillStyle = i === 0 ? '#ffffff' : 'rgba(255,255,255,0.85)';
+        ctx.fillStyle = i === 0 ? INK : SECONDARY;
         ctx.font = `${i === 0 ? 800 : 600} 40px ${sans}`;
         ctx.fillText(ellipsize(label, colW - 60), x + 48, y);
       });
@@ -249,15 +244,15 @@ const Wrapped = (() => {
     // personality
     const py = 1250;
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillStyle = MUTED;
     ctx.font = `600 32px ${sans}`;
     ctx.fillText('Listening personality', W / 2, py);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = INK;
     ctx.font = `800 72px ${sans}`;
     ctx.fillText(`${p.emoji} ${p.name}`, W / 2, py + 90);
 
     // headline facts
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillStyle = SECONDARY;
     ctx.font = `500 36px ${sans}`;
     const lines = [];
     const t1 = topTracks[0];
@@ -267,9 +262,9 @@ const Wrapped = (() => {
     lines.forEach((l, i) => ctx.fillText(ellipsize(l, W - 160), W / 2, py + 190 + i * 62));
 
     // footer
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = MUTED;
     ctx.font = `500 30px ${sans}`;
-    ctx.fillText('made with my real streaming history · not an official Spotify thing', W / 2, H - 80);
+    ctx.fillText('made from my full streaming history', W / 2, H - 84);
 
     return canvas;
   }

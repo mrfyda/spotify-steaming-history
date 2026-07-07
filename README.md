@@ -1,4 +1,6 @@
-# Spotify History Report
+# Listening History
+
+A quiet, content-first report for your Spotify streaming history export.
 
 Drop your Spotify data export zip on the page and get:
 

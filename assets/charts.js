@@ -4,8 +4,8 @@
  */
 const Charts = (() => {
 
-  const MARK = '#14b04e';
-  const SEQ = ['#183c26', '#0e6b30', '#169c46', '#1db954', '#4fd07f', '#9be9b8']; // dark→bright ramp for dark surface
+  const MARK = '#2a78d6';
+  const SEQ = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95']; // light→dark blue ramp (light surface)
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   /* ---------- tooltip singleton ---------- */
@@ -82,7 +82,7 @@ const Charts = (() => {
       const line = document.createElementNS(svgNS, 'line');
       line.setAttribute('x1', padL); line.setAttribute('x2', W - padR);
       line.setAttribute('y1', y); line.setAttribute('y2', y);
-      line.setAttribute('stroke', i === 0 ? '#383835' : '#2c2c2a');
+      line.setAttribute('stroke', i === 0 ? '#c3c2b7' : '#e1e0d9');
       line.setAttribute('stroke-width', '1');
       svg.appendChild(line);
       if (i > 0) {
