@@ -11,6 +11,19 @@ const Report = (() => {
   function render(allPlays) {
     renderFilters(allPlays);
     renderBody(allPlays);
+
+    // keep the UI in sync with a background enrichment run
+    Enrich.setOnUpdate(s => {
+      if (document.getElementById('report').hidden) return;
+      if (!s.running || s.done === s.total || (s.done > 0 && s.done % 60 === 0)) {
+        const y = window.scrollY;
+        renderBody(allPlays);
+        window.scrollTo(0, y);
+      } else {
+        const counter = document.querySelector('.enrich-bar b');
+        if (counter) counter.textContent = `Fetching genres & artwork… ${s.done}/${s.total}`;
+      }
+    });
   }
 
   function renderFilters(allPlays) {
@@ -367,37 +380,54 @@ const Report = (() => {
     return s;
   }
 
-  /* opt-in iTunes enrichment (genre + artwork) for the top artists */
+  /* opt-in iTunes enrichment (genre + artwork), scaled to the whole library */
   function enrichControls(sectionEl, artistEntries, allPlays) {
-    const names = artistEntries.map(e => e.key);
-    if (!Enrich.pending(names).length) return; // everything cached already
-    const bar = el('div', 'enrich-bar',
-      `<button class="chip" id="enrichBtn">Add genres &amp; artwork</button>
-       <span class="enrich-note">Looks up your top ${Enrich.TOP_N} artists on Apple's iTunes Search API.
-       Only the artist names are sent; nothing about your listening leaves the browser.</span>`);
+    // rank order; skip one-off artists that would dominate a long run for little coverage
+    const names = artistEntries.filter(e => e.plays >= 3 || e.ms >= 10 * 60_000).map(e => e.key);
+    const pendingCount = Enrich.pending(names).length;
+    if (!pendingCount && !Enrich.state.running) return;
+
+    const bar = el('div', 'enrich-bar');
     sectionEl.insertBefore(bar, sectionEl.querySelector('.card'));
-    const btn = bar.querySelector('#enrichBtn');
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      await Enrich.run(names, (done, total) => { btn.textContent = `Fetching… ${done}/${total}`; });
-      renderBody(allPlays);
-    });
+    const s = Enrich.state;
+    if (s.running) {
+      const remaining = s.total - s.done;
+      const eta = remaining > 15 ? ` · about ${Math.ceil(remaining * 3.2 / 60)} min left` : '';
+      bar.innerHTML = `<span class="enrich-note"><b>Fetching genres &amp; artwork… ${s.done}/${s.total}</b>${eta}
+        · keep browsing, progress is saved as it goes</span>
+        <button class="chip" id="enrichStop">Stop</button>`;
+      bar.querySelector('#enrichStop').addEventListener('click', () => Enrich.stop());
+    } else {
+      bar.innerHTML = `<button class="chip" id="enrichBtn">Add genres &amp; artwork</button>
+        <span class="enrich-note">${s.error ? esc(s.error) + ' ' : ''}Looks up ${fmtInt(pendingCount)} artists on
+        Apple's iTunes Search API. The first 30 are quick; the rest keep loading in the background
+        (Apple allows about 20 lookups a minute). Only artist names are sent; nothing about your
+        listening leaves the browser, and you can stop or resume anytime.</span>`;
+      bar.querySelector('#enrichBtn').addEventListener('click', () => Enrich.run(names));
+    }
   }
 
-  /* genre share across enriched artists, weighted by listening time */
+  /* genre share across ALL enriched artists, weighted by listening time */
   function genresSection(parent, artistEntries) {
     const byGenre = new Map();
-    let coveredMs = 0, coveredArtists = 0;
-    for (const e of artistEntries.slice(0, Enrich.TOP_N)) {
+    let coveredMs = 0, coveredArtists = 0, totalMs = 0;
+    for (const e of artistEntries) {
+      totalMs += e.ms;
       const g = Enrich.get(e.key)?.g;
       if (!g) continue;
       byGenre.set(g, (byGenre.get(g) || 0) + e.ms);
       coveredMs += e.ms; coveredArtists++;
     }
     if (byGenre.size < 2) return;
-    const s = section(parent, 'Genres', `from your top ${coveredArtists} artists, via iTunes`);
+    const s = section(parent, 'Genres',
+      `from ${fmtInt(coveredArtists)} artists covering ${fmtPct(coveredMs / Math.max(1, totalMs))} of your listening, via iTunes`);
     const c = card(s);
-    const rows = [...byGenre.entries()].sort((x, y) => y[1] - x[1]);
+    let rows = [...byGenre.entries()].sort((x, y) => y[1] - x[1]);
+    if (rows.length > 13) {
+      const tail = rows.slice(12);
+      rows = rows.slice(0, 12);
+      rows.push([`Other (${fmtInt(tail.length)} genres)`, tail.reduce((sum, [, ms]) => sum + ms, 0)]);
+    }
     const maxMs = rows[0][1];
     c.innerHTML += `<table><thead><tr><th>Genre</th><th></th><th class="num">Share</th><th class="num">Time</th></tr></thead>
       <tbody>${rows.map(([g, ms]) => `
