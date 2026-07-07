@@ -89,15 +89,16 @@ const Sample = (() => {
           const track = tracks[Math.floor(Math.pow(rand(), 1.6) * tracks.length)];
           const skipped = rand() < 0.14;
           const ms = skipped ? Math.floor(rand() * 25000) : Math.floor((140 + rand() * 120) * 1000);
+          const rs = rand();
           plays.push({
             ts: t.toISOString(), ms_played: ms, platform, conn_country: rand() < 0.94 ? 'PT' : (rand() < 0.5 ? 'ES' : 'US'),
             master_metadata_track_name: track,
             master_metadata_album_artist_name: artist,
             master_metadata_album_album_name: album,
             spotify_track_uri: 'spotify:track:demo',
-            reason_start: 'trackdone',
+            reason_start: rs < 0.55 ? 'trackdone' : rs < 0.8 ? 'clickrow' : rs < 0.9 ? 'playbtn' : rs < 0.94 ? 'backbtn' : 'appload',
             reason_end: skipped ? 'fwdbtn' : REASONS_END[Math.floor(rand() * REASONS_END.length)],
-            shuffle: rand() < 0.6, skipped, offline: rand() < 0.05, incognito_mode: false,
+            shuffle: rand() < 0.6, skipped, offline: rand() < 0.05, incognito_mode: rand() < 0.015,
           });
           t = new Date(t.getTime() + ms + 1000);
         }

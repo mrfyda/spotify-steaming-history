@@ -123,10 +123,54 @@ const Report = (() => {
     punchCard.style.marginTop = '12px';
     Charts.punchcard(punchCard, a.punch, WEEKDAYS, v => v ? fmtMs(v) : 'nothing');
 
+    if (currentYear != null) {
+      const calCard = card(time, `Every day of ${rangeLabel}`, 'daily listening calendar');
+      calCard.style.marginTop = '12px';
+      Charts.calendar(calCard, a.byDay, currentYear, ms => ms ? fmtMsLong(ms) : 'nothing');
+    }
+
+    /* ---- discovery ---- */
+    if (a.discoveryRate != null && monthData.length > 1) {
+      const disc = section(body, 'Discovery',
+        `${fmtPct(a.discoveryRate)} of your streams were tracks you'd never played before` +
+        (currentYear == null ? '' : ` · ${fmtInt(a.newArtists ?? 0)} new artists`));
+      const dCard = card(disc, 'New music over time', 'share of each month’s streams that were first-time tracks');
+      Charts.columnChart(dCard, monthData.map(m => ({
+        label: m.short,
+        value: m.musicPlays ? (m.newTracks / m.musicPlays) * 100 : 0,
+        tipTitle: m.long,
+        tipSub: `${fmtInt(m.newTracks)} first-time tracks · ${fmtPct(m.musicPlays ? m.newTracks / m.musicPlays : 0)} of streams`,
+      })), {
+        height: 170,
+        formatValue: v => `${Math.round(v)}%`,
+        tickEvery: (i) => monthData[i].tick,
+        ariaLabel: 'Share of first-time tracks per month',
+        tableCols: ['Month', 'First-time tracks'],
+      });
+    }
+
+    /* ---- eras timeline ---- */
+    if (a.eras.length > 1) {
+      const erasSec = section(body, currentYear == null ? 'Your eras' : `${rangeLabel}, month by month`,
+        currentYear == null ? 'the artist who defined each year' : 'the artist who defined each month');
+      const eCard = card(erasSec);
+      const maxEra = Math.max(...a.eras.map(e => e.ms), 1);
+      eCard.innerHTML += `<table><thead><tr><th>${currentYear == null ? 'Year' : 'Month'}</th><th>Artist</th><th></th><th class="num">Time</th></tr></thead>
+        <tbody>${a.eras.map(e => `
+          <tr>
+            <td class="rank" style="width:60px">${currentYear == null ? esc(e.period) : esc(MONTH_SHORT[Number(e.period.slice(5)) - 1])}</td>
+            <td class="t-name">${esc(e.artist)}</td>
+            <td class="t-bar-wrap"><div class="t-bar-track"><div class="t-bar" style="width:${Math.max(1, Math.round((e.ms / maxEra) * 100))}%"></div></div></td>
+            <td class="num">${fmtMs(e.ms)}</td>
+          </tr>`).join('')}</tbody></table>`;
+    }
+
     /* ---- top lists ---- */
     topList(body, 'Top artists', top(a.byArtist, 'ms'), {
       name: e => e.key,
       sub: e => `${fmtInt(e.tracks || 0)} tracks`,
+      spark: e => e.series,
+      sparkTitle: currentYear == null ? 'Trend by year' : 'Trend by month',
       rangeLabel,
     });
     topList(body, 'Top tracks', top(a.byTrack, 'plays'), {
@@ -148,24 +192,37 @@ const Report = (() => {
       });
     }
 
-    /* ---- records ---- */
-    const rec = section(body, 'Records & habits');
-    const records = el('div', 'records');
-    rec.appendChild(records);
-    const record = (title, value, sub) => records.appendChild(el('div', 'record',
-      `<div class="r-title">${esc(title)}</div>` +
-      `<div class="r-value">${esc(value)}</div>${sub ? `<div class="r-sub">${esc(sub)}</div>` : ''}`));
+    /* ---- records & habits ---- */
+    const mkRecords = (sec) => {
+      const grid = el('div', 'records');
+      sec.appendChild(grid);
+      return (title, value, sub) => grid.appendChild(el('div', 'record',
+        `<div class="r-title">${esc(title)}</div>` +
+        `<div class="r-value">${esc(value)}</div>${sub ? `<div class="r-sub">${esc(sub)}</div>` : ''}`));
+    };
 
+    const record = mkRecords(section(body, 'Records'));
     if (a.peakDay) record('Biggest day', fmtDate(a.peakDay.day, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }), `${fmtMsLong(a.peakDay.ms)} · ${fmtInt(a.peakDay.plays)} streams`);
     if (a.longestStreak?.days > 1) record('Longest streak', `${fmtInt(a.longestStreak.days)} days in a row`, `ending ${fmtDate(a.longestStreak.end)}`);
+    if (a.sessions?.longest) record('Longest session', fmtMsLong(a.sessions.longest.ms), `${fmtInt(a.sessions.longest.tracks)} streams · ${fmtDate(a.sessions.longest.start)}`);
     if (a.loopRecord) record('Most loops in one day', `${a.loopRecord.count}× “${a.loopRecord.track}”`, `${a.loopRecord.artist} · ${fmtDate(a.loopRecord.day)}`);
-    record('Average per active day', fmtMsLong(a.totalMs / Math.max(1, a.activeDays)), `${fmtPct(a.activeDays / a.daySpan)} of days had listening`);
-    if (a.skipRate != null) record('Skip rate', fmtPct(a.skipRate), a.mostSkipped ? `most skipped: “${a.mostSkipped.track}” (${a.mostSkipped.skips}×)` : null);
-    if (a.completionRate != null) record('Tracks played to the end', fmtPct(a.completionRate), 'of plays with a known ending');
-    if (a.shuffleRate != null) record('Shuffle', fmtPct(a.shuffleRate), 'of plays with shuffle on');
-    if (a.offlineRate != null && a.offlineRate > 0) record('Offline listening', fmtPct(a.offlineRate), 'of plays while offline');
+    if (a.topReplay) record('Most rewound track', `“${a.topReplay.track}”`, `${a.topReplay.artist} · rewound ${fmtInt(a.topReplay.replays)} times`);
+    if (a.evergreen) record('Longest-running favorite', `“${a.evergreen.track}”`, `${a.evergreen.artist} · in rotation for ${fmtInt(a.evergreen.span / 86_400_000 / 365 * 10) / 10} years`);
+    if (a.comeback) record('Biggest comeback', a.comeback.artist, `${fmtInt(a.comeback.gap / 86_400_000 / 30)} months of silence, then back on ${fmtDate(a.comeback.end)}`);
+    if (a.oneHit) record('One-song artist', a.oneHit.artist, `“${a.oneHit.track}” is ${fmtPct(a.oneHit.share)} of their ${fmtInt(a.oneHit.plays)} plays`);
+    if (a.nightArtist) record('Late-night companion', a.nightArtist.artist, `${fmtMs(a.nightArtist.ms)} between midnight and 5am`);
     if (a.newArtists != null) record('New artists discovered', fmtInt(a.newArtists), a.topNewArtist ? `biggest: ${a.topNewArtist.artist}` : null);
     if (a.firstTrack) record(currentYear ? `First track of ${rangeLabel}` : 'First track on record', `“${a.firstTrack.track}”`, `${a.firstTrack.artist} · ${fmtDate(a.firstTrack.ts)}`);
+
+    const habit = mkRecords(section(body, 'Habits'));
+    habit('Average per active day', fmtMsLong(a.totalMs / Math.max(1, a.activeDays)), `${fmtPct(a.activeDays / a.daySpan)} of days had listening`);
+    if (a.sessions?.count > 1) habit('Listening sessions', fmtInt(a.sessions.count), `about ${fmtMsLong(a.sessions.avgMs)} each`);
+    if (a.startChosenRate != null) habit('Plays you started yourself', fmtPct(a.startChosenRate), 'the rest flowed in from autoplay and queues');
+    if (a.skipRate != null) habit('Skip rate', fmtPct(a.skipRate), a.mostSkipped ? `most skipped: “${a.mostSkipped.track}” (${a.mostSkipped.skips}×)` : null);
+    if (a.completionRate != null) habit('Tracks played to the end', fmtPct(a.completionRate), 'of plays with a known ending');
+    if (a.shuffleRate != null) habit('Shuffle', fmtPct(a.shuffleRate), 'of plays with shuffle on');
+    if (a.offlineRate != null && a.offlineRate > 0) habit('Offline listening', fmtPct(a.offlineRate), 'of plays while offline');
+    if (a.incognitoCount > 0) habit('Private sessions', fmtInt(a.incognitoCount) + ' plays', 'listened in incognito mode');
 
     /* ---- platforms & countries ---- */
     if (a.platforms.size || a.countries.size) {
@@ -201,6 +258,7 @@ const Report = (() => {
           ? (d.getMonth() === 0 ? String(d.getFullYear()) : null)
           : MONTH_SHORT[d.getMonth()],
         ms: e.ms, plays: e.plays,
+        musicPlays: e.musicPlays || 0, newTracks: e.newTracks || 0,
       });
       d.setMonth(d.getMonth() + 1);
     }
@@ -210,7 +268,7 @@ const Report = (() => {
   }
 
   /* generic searchable, expandable top list */
-  function topList(parent, title, entries, { name, sub, sortBy = 'ms', rangeLabel }) {
+  function topList(parent, title, entries, { name, sub, sortBy = 'ms', rangeLabel, spark, sparkTitle }) {
     const s = section(parent, title, `${fmtInt(entries.length)} total · ${rangeLabel}`);
     const c = card(s);
 
@@ -233,17 +291,19 @@ const Report = (() => {
     const maxMs = entries[0] ? entries[0][sortBy] : 1;
 
     function draw() {
+      const cols = 5 + (spark ? 1 : 0);
       const rows = filtered.slice(0, shown).map((e, i) => `
         <tr>
           <td class="rank">${filtered === entries ? i + 1 : ''}</td>
           <td><div class="t-name">${esc(name(e))}</div>${sub ? `<div class="t-sub">${esc(sub(e))}</div>` : ''}</td>
+          ${spark ? `<td class="spark-cell">${Charts.sparklineHTML(spark(e))}</td>` : ''}
           <td class="t-bar-wrap"><div class="t-bar-track"><div class="t-bar" style="width:${Math.max(1, Math.round((e[sortBy] / maxMs) * 100))}%"></div></div></td>
           <td class="num">${fmtInt(e.plays)}</td>
           <td class="num">${fmtMs(e.ms)}</td>
         </tr>`).join('');
       tableWrap.innerHTML = `<table>
-        <thead><tr><th></th><th>Name</th><th></th><th class="num">Streams</th><th class="num">Time</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="5" class="empty-note">No matches.</td></tr>`}</tbody>
+        <thead><tr><th></th><th>Name</th>${spark ? `<th class="spark-cell">${esc(sparkTitle || '')}</th>` : ''}<th></th><th class="num">Streams</th><th class="num">Time</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="${cols}" class="empty-note">No matches.</td></tr>`}</tbody>
       </table>`;
       more.hidden = shown >= filtered.length;
       more.textContent = `Show more (${fmtInt(Math.min(50, filtered.length - shown))} of ${fmtInt(filtered.length - shown)} remaining)`;

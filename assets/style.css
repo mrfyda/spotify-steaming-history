@@ -159,6 +159,15 @@ figure.chart svg { display: block; width: 100%; height: auto; }
 .punch-legend { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: .75rem; margin-top: 10px; justify-content: flex-end; }
 .punch-legend i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
 
+/* daily calendar */
+.cal { display: grid; gap: 2px; align-items: stretch; }
+.cal-cell { aspect-ratio: 1; border-radius: 2px; background: var(--surface-3); min-width: 0; }
+.cal-mlab { color: var(--text-muted); font-size: .65rem; overflow: visible; white-space: nowrap; }
+
+/* sparkline column */
+.spark-cell { width: 112px; }
+.spark-cell svg { display: block; }
+
 /* tables / top lists */
 table { width: 100%; border-collapse: collapse; font-size: .93rem; }
 th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: .8rem; padding: 6px 10px; border-bottom: 1px solid var(--grid); }
@@ -264,4 +273,5 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
   .filter-row { top: 46px; }
   th, td { padding: 6px; }
   .t-bar-wrap { display: none; }
+  .spark-cell { display: none; }
 }
