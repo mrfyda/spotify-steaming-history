@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spotify History Report — your streaming history, visualized</title>
-<meta name="description" content="Drop your Spotify streaming history export and get an exhaustive listening report plus a shareable Wrapped-style recap. Everything runs in your browser — no data is uploaded.">
+<title>Spotify History Report: your streaming history, visualized</title>
+<meta name="description" content="Drop your Spotify streaming history export and get an exhaustive listening report plus a shareable Wrapped-style recap. Everything runs in your browser and no data is uploaded.">
 <meta property="og:title" content="Spotify History Report">
 <meta property="og:description" content="Drop your Spotify data export, get an exhaustive listening report and a shareable Wrapped-style recap. 100% in your browser.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%231DB954'/%3E%3Cpath d='M28 62c14-4 30-3 42 4M26 50c17-5 36-3 50 5M25 38c19-6 42-4 57 6' stroke='%23121212' stroke-width='7' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
@@ -27,15 +27,15 @@
 <!-- ============ LANDING / DROP ZONE ============ -->
 <main id="landing">
   <section class="hero">
-    <h1>Your entire Spotify history,<br><span class="accent">actually explored.</span></h1>
-    <p class="sub">Drop your Spotify data export below and get a deep, last.fm-style report of everything
-    you've ever streamed — plus a shareable Wrapped-style recap with fun facts.</p>
+    <h1>Your entire Spotify history,<br><span class="accent">not just the top five.</span></h1>
+    <p class="sub">Drop your Spotify data export below for a deep, last.fm-style report of everything
+    you've ever streamed, plus a Wrapped-style recap you can share.</p>
 
     <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drop your Spotify export zip here or click to browse">
       <div class="dz-inner">
         <div class="dz-icon">⬇</div>
         <div class="dz-title">Drop your <strong>.zip</strong> here</div>
-        <div class="dz-sub">or click to browse — <code>.json</code> files work too</div>
+        <div class="dz-sub">or click to browse (<code>.json</code> files work too)</div>
       </div>
       <input type="file" id="fileInput" accept=".zip,.json,application/zip,application/json" multiple hidden>
     </div>
@@ -49,9 +49,8 @@
     <p class="try"><button class="linkish" id="sampleBtn">No file handy? Try it with sample data →</button></p>
 
     <div class="privacy">
-      <span class="lock">🔒</span>
-      <div><strong>Nothing leaves your browser.</strong> Your file is processed entirely on this page with JavaScript —
-      there is no server, no upload, no tracking. Reload the page and it's gone.</div>
+      <div><strong>Nothing leaves your browser.</strong> Your file is processed entirely on this page.
+      No server, no upload, no tracking. Reload the page and it's gone.</div>
     </div>
   </section>
 
@@ -59,9 +58,9 @@
     <h2>How to get your data</h2>
     <ol>
       <li>Go to <a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener">spotify.com/account/privacy</a></li>
-      <li>Request the <strong>Extended streaming history</strong> (full lifetime history — takes up to 30 days, worth it)
-          or the basic <strong>Account data</strong> (last year only, arrives in a few days)</li>
-      <li>Spotify emails you a download link — drop the zip here as-is, no need to unpack it</li>
+      <li>Request the <strong>Extended streaming history</strong> (your full lifetime history; takes up to
+          30 days and is worth the wait) or the basic <strong>Account data</strong> (last year only, arrives in a few days)</li>
+      <li>Spotify emails you a download link. Drop the zip here as-is, no need to unpack it</li>
     </ol>
   </section>
 </main>

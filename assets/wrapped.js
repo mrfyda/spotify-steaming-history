@@ -21,10 +21,10 @@ const Wrapped = (() => {
     slides.className = 'slides';
     root.appendChild(slides);
 
-    const slide = (variant, html) => {
+    const slide = (variant, html, { hint = false } = {}) => {
       const s = document.createElement('section');
       s.className = `slide slide-${variant}`;
-      s.innerHTML = `<div class="s-inner">${html}</div><div class="s-foot">scroll ↓</div>`;
+      s.innerHTML = `<div class="s-inner">${html}</div>${hint ? '<div class="s-foot">scroll ↓</div>' : ''}`;
       slides.appendChild(s);
       return s;
     };
@@ -32,12 +32,12 @@ const Wrapped = (() => {
     /* --- intro / year picker --- */
     const years = Stats.years(allPlays).slice().reverse();
     const intro = slide('a', `
-      <div class="s-kicker">Your listening, wrapped</div>
+      <div class="s-lead">Your listening, wrapped.</div>
       <div class="s-hero">${selectedYear}</div>
-      <p class="s-sub">A recap of everything you streamed in ${selectedYear}. Scroll through, then grab your share card at the end.</p>
+      <p class="s-sub">Everything you streamed in ${selectedYear}, ending in a card you can share.</p>
       <div class="year-pick" role="toolbar" aria-label="Pick a year">
         ${years.map(y => `<button class="chip ${y === selectedYear ? 'active' : ''}" data-year="${y}">${y}</button>`).join('')}
-      </div>`);
+      </div>`, { hint: true });
     intro.querySelectorAll('[data-year]').forEach(b =>
       b.addEventListener('click', () => { selectedYear = Number(b.dataset.year); render(allPlays); }));
 
@@ -49,10 +49,10 @@ const Wrapped = (() => {
     /* --- minutes --- */
     const minutes = Math.round(a.totalMs / 60000);
     slide('b', `
-      <div class="s-kicker">Time listened</div>
-      <div class="s-hero">${fmtInt(minutes)}</div>
-      <p class="s-sub">minutes of music${a.podcastMs > 0 ? ' and podcasts' : ''} in ${selectedYear} —
-      that's <b>${fmtMsLong(a.totalMs)}</b>, across ${fmtInt(a.activeDays)} different days.</p>`);
+      <div class="s-lead">You listened for</div>
+      <div class="s-hero">${fmtInt(minutes)} minutes</div>
+      <p class="s-sub">of music${a.podcastMs > 0 ? ' and podcasts' : ''} in ${selectedYear}.
+      That's <b>${fmtMsLong(a.totalMs)}</b>, spread across ${fmtInt(a.activeDays)} different days.</p>`);
 
     /* --- top artist --- */
     const topArtists = top(a.byArtist, 'ms', 5);
@@ -60,13 +60,13 @@ const Wrapped = (() => {
       const t1 = topArtists[0];
       const share = a.musicMs ? t1.ms / a.musicMs : 0;
       slide('c', `
-        <div class="s-kicker">Your top artist</div>
+        <div class="s-lead">Nobody came close to</div>
         <div class="s-hero">${esc(t1.key)}</div>
-        <p class="s-sub">${fmtMs(t1.ms)} together · ${fmtInt(t1.plays)} streams ·
-        <b>${fmtPct(share)}</b> of all your music time went to them.</p>`);
+        <p class="s-sub">Your top artist. ${fmtMs(t1.ms)} together, ${fmtInt(t1.plays)} streams,
+        and <b>${fmtPct(share)}</b> of all your music time.</p>`);
 
       slide('d', `
-        <div class="s-kicker">Top artists of ${selectedYear}</div>
+        <div class="s-lead">The rest of the podium held its ground.</div>
         <div class="top5">
           ${topArtists.map((e, i) => `
             <div class="t5"><span class="n">${i + 1}</span><span class="name">${esc(e.key)}</span>
@@ -79,9 +79,9 @@ const Wrapped = (() => {
     if (topTracks.length) {
       const t1 = topTracks[0];
       slide('e', `
-        <div class="s-kicker">Your #1 song</div>
+        <div class="s-lead">One song refused to leave the queue.</div>
         <div class="s-hero" style="font-size:clamp(1.8rem,6vw,3.6rem)">“${esc(t1.track)}”</div>
-        <p class="s-sub">${esc(t1.artist)} — you played it <b>${fmtInt(t1.plays)} times</b> (${fmtMs(t1.ms)}).</p>
+        <p class="s-sub">${esc(t1.artist)}. You played it <b>${fmtInt(t1.plays)} times</b>, ${fmtMs(t1.ms)} in total.</p>
         <div class="top5" style="margin-top:34px">
           ${topTracks.slice(1).map((e, i) => `
             <div class="t5"><span class="n">${i + 2}</span><span class="name">${esc(e.track)}</span>
@@ -92,27 +92,25 @@ const Wrapped = (() => {
     /* --- personality --- */
     const p = personality(a);
     slide('a', `
-      <div class="s-kicker">Your listening personality</div>
+      <div class="s-lead">All of it adds up to a type. This year, you were</div>
       <div class="s-hero">${p.emoji} ${p.name}</div>
       <p class="s-sub">${p.blurb}</p>`);
 
     /* --- fun facts --- */
     const facts = funFacts(a);
     slide('c', `
-      <div class="s-kicker">Fun facts</div>
+      <div class="s-lead">A few things you probably didn't notice about yourself:</div>
       <div style="margin-top:8px">${facts.map(f => `<div class="wfact">${f}</div>`).join('')}</div>`);
 
     /* --- share card --- */
     const shareSlide = slide('e', `
-      <div class="s-kicker">That's a wrap</div>
-      <div class="s-hero" style="font-size:clamp(2rem,7vw,4rem)">Share it 🎉</div>
-      <p class="s-sub">Your ${selectedYear} recap as an image — save it or share it anywhere.</p>
+      <div class="s-hero" style="font-size:clamp(2rem,7vw,4rem)">That's a wrap.</div>
+      <p class="s-sub">Your ${selectedYear}, as one image. Save it, or send it to the group chat.</p>
       <img class="share-preview" id="sharePreview" alt="Preview of your shareable recap card">
       <div class="share-actions">
         <button class="btn" id="downloadCard">Download image</button>
         <button class="btn secondary" id="shareCard" hidden>Share…</button>
       </div>`);
-    shareSlide.querySelector('.s-foot').remove();
 
     const canvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p);
     const preview = shareSlide.querySelector('#sharePreview');
@@ -157,25 +155,25 @@ const Wrapped = (() => {
     };
     if (variety > 0.12) return {
       emoji: '🧭', name: 'The Explorer',
-      blurb: `${fmtInt(a.uniqueArtists)} different artists this year — you rarely play the same thing twice.`,
+      blurb: `${fmtInt(a.uniqueArtists)} different artists this year. You rarely play the same thing twice.`,
     };
     if (a.longestStreak?.days >= 30) return {
       emoji: '🔥', name: 'The Everyday Listener',
-      blurb: `A ${fmtInt(a.longestStreak.days)}-day listening streak. Music isn't a habit for you, it's infrastructure.`,
+      blurb: `A ${fmtInt(a.longestStreak.days)}-day listening streak. Music runs in the background of your entire life.`,
     };
     return {
       emoji: '⚖️', name: 'The Balanced Listener',
-      blurb: `Old favorites, new finds, day and night — ${fmtInt(a.uniqueArtists)} artists in healthy rotation.`,
+      blurb: `Old favorites, new finds, day and night: ${fmtInt(a.uniqueArtists)} artists in healthy rotation.`,
     };
   }
 
   function funFacts(a) {
     const facts = [];
-    if (a.peakDay) facts.push(`Your biggest day was <b>${fmtDate(a.peakDay.day, { weekday: 'long', month: 'long', day: 'numeric' })}</b> — ${fmtMsLong(a.peakDay.ms)} of listening. What happened there?`);
+    if (a.peakDay) facts.push(`Your biggest day was <b>${fmtDate(a.peakDay.day, { weekday: 'long', month: 'long', day: 'numeric' })}</b>: ${fmtMsLong(a.peakDay.ms)} of listening. What happened there?`);
     if (a.loopRecord && a.loopRecord.count >= 5) facts.push(`On ${fmtDate(a.loopRecord.day, { month: 'long', day: 'numeric' })} you played <b>“${esc(a.loopRecord.track)}”</b> ${a.loopRecord.count} times. In one day.`);
     if (a.longestStreak?.days > 3) facts.push(`You listened <b>${fmtInt(a.longestStreak.days)} days in a row</b> at your longest streak.`);
-    facts.push(`Your golden hour is <b>${fmtHour(a.peakHour)}</b> — more listening than any other time of day.`);
-    if (a.newArtists) facts.push(`You discovered <b>${fmtInt(a.newArtists)} artists</b> you'd never played before${a.topNewArtist ? ` — ${esc(a.topNewArtist.artist)} stuck the hardest` : ''}.`);
+    facts.push(`Your golden hour is <b>${fmtHour(a.peakHour)}</b>, busier than any other time of day.`);
+    if (a.newArtists) facts.push(`You discovered <b>${fmtInt(a.newArtists)} artists</b> you'd never played before${a.topNewArtist ? `, and ${esc(a.topNewArtist.artist)} stuck the hardest` : ''}.`);
     if (a.skipRate != null) facts.push(a.skipRate > 0.25
       ? `You skipped <b>${fmtPct(a.skipRate)}</b> of tracks. Ruthless. DJs fear you.`
       : `You only skipped <b>${fmtPct(a.skipRate)}</b> of tracks. Patience of a saint.`);
@@ -214,8 +212,8 @@ const Wrapped = (() => {
     // header
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    ctx.font = `700 34px ${sans}`;
-    ctx.fillText('M Y   L I S T E N I N G ,   W R A P P E D', W / 2, 140);
+    ctx.font = `600 40px ${sans}`;
+    ctx.fillText('My year in music', W / 2, 140);
     ctx.fillStyle = '#ffffff';
     ctx.font = `800 190px ${sans}`;
     ctx.fillText(String(a.year), W / 2, 330);
@@ -233,8 +231,8 @@ const Wrapped = (() => {
     const drawList = (title, items, x, colW) => {
       ctx.textAlign = 'left';
       ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.font = `700 30px ${sans}`;
-      ctx.fillText(title.toUpperCase(), x, colY);
+      ctx.font = `600 32px ${sans}`;
+      ctx.fillText(title, x, colY);
       items.slice(0, 5).forEach((label, i) => {
         const y = colY + 70 + i * lineH;
         ctx.fillStyle = i === 0 ? '#1DB954' : 'rgba(255,255,255,0.45)';
@@ -252,8 +250,8 @@ const Wrapped = (() => {
     const py = 1250;
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = `700 30px ${sans}`;
-    ctx.fillText('LISTENING PERSONALITY', W / 2, py);
+    ctx.font = `600 32px ${sans}`;
+    ctx.fillText('Listening personality', W / 2, py);
     ctx.fillStyle = '#ffffff';
     ctx.font = `800 72px ${sans}`;
     ctx.fillText(`${p.emoji} ${p.name}`, W / 2, py + 90);

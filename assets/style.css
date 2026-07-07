@@ -23,6 +23,12 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 [hidden] { display: none !important; }
+h1, h2, h3 { text-wrap: balance; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
 html { scroll-behavior: smooth; }
 body {
   background: var(--bg);
@@ -91,11 +97,10 @@ main { flex: 1; }
 .linkish:hover { color: var(--accent); }
 
 .privacy {
-  margin-top: 40px; display: flex; gap: 14px; align-items: flex-start;
+  margin-top: 40px;
   background: var(--surface-1); border: 1px solid var(--border);
   padding: 16px 18px; border-radius: var(--radius); color: var(--text-secondary); font-size: .95rem;
 }
-.privacy .lock { font-size: 1.3rem; }
 
 .howto { margin-top: 56px; }
 .howto h2 { font-size: 1.2rem; margin-bottom: 12px; }
@@ -182,9 +187,8 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
 /* records / fun rows */
 .records { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
 .record { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-.record .r-icon { font-size: 1.3rem; }
-.record .r-title { color: var(--text-muted); font-size: .82rem; margin-top: 6px; }
-.record .r-value { font-weight: 700; margin-top: 2px; }
+.record .r-title { color: var(--text-muted); font-size: .82rem; }
+.record .r-value { font-weight: 700; font-size: 1.1rem; margin-top: 4px; letter-spacing: -.01em; }
 .record .r-sub { color: var(--text-secondary); font-size: .85rem; margin-top: 2px; }
 
 /* tooltip */
@@ -207,7 +211,7 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
   text-align: center; padding: 48px 24px; position: relative; overflow: hidden;
 }
 .slide .s-inner { max-width: 640px; width: 100%; position: relative; z-index: 2; }
-.slide .s-kicker { text-transform: uppercase; letter-spacing: .2em; font-size: .8rem; color: rgba(255,255,255,.75); font-weight: 700; }
+.slide .s-lead { font-size: 1.1rem; color: rgba(255,255,255,.78); font-weight: 600; margin-bottom: 4px; }
 .slide .s-hero { font-size: clamp(2.6rem, 9vw, 5.5rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.02; margin: 14px 0; }
 .slide .s-sub { font-size: 1.1rem; color: rgba(255,255,255,.85); max-width: 480px; margin: 0 auto; }
 .slide .s-foot { position: absolute; bottom: 26px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,.55); font-size: .85rem; z-index: 2; }
