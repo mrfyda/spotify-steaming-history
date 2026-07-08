@@ -69,6 +69,8 @@ const Stats = (() => {
       offlineKnown: 0, offlineOn: 0,
       startKnown: 0, startChosen: 0, replays: 0, incognitoCount: 0,
       newTracksTotal: 0,
+      discoveryHow: { chosen: 0, flowed: 0, shuffled: 0, other: 0 },
+      discoveryDoorway: { dive: 0, another: 0, podcast: 0, opener: 0 },
     };
     if (a.empty) return a;
 
@@ -84,7 +86,7 @@ const Stats = (() => {
       : 12;
 
     // session accumulator
-    let sessionCount = 0, sessionMsTotal = 0, prevEnd = null;
+    let sessionCount = 0, sessionMsTotal = 0, prevEnd = null, prevItem = null;
     let curStart = null, curMs = 0, curTracks = 0, longest = null;
     const closeSession = () => {
       if (curStart == null) return;
@@ -100,7 +102,8 @@ const Stats = (() => {
       if (a.firstTs == null) a.firstTs = p.ts;
       a.lastTs = p.ts;
 
-      if (prevEnd == null || p.ts - prevEnd > SESSION_GAP) {
+      const isSessionStart = prevEnd == null || p.ts - prevEnd > SESSION_GAP;
+      if (isSessionStart) {
         closeSession();
         curStart = p.ts - p.ms; curMs = 0; curTracks = 0; sessionCount++;
       }
@@ -158,6 +161,16 @@ const Stats = (() => {
         if (counted && trackFirst.get(trackKey) === p.ts) {
           a.newTracksTotal++;
           monthE.newTracks = (monthE.newTracks || 0) + 1;
+
+          // HOW the discovery started (from reason_start + shuffle)…
+          if (p.reasonStart === 'clickrow' || p.reasonStart === 'playbtn') a.discoveryHow.chosen++;
+          else if (p.reasonStart === 'trackdone') a.discoveryHow[p.shuffle ? 'shuffled' : 'flowed']++;
+          else if (p.reasonStart != null) a.discoveryHow.other++;
+          // …and the doorway it came through (what played right before)
+          if (isSessionStart || !prevItem) a.discoveryDoorway.opener++;
+          else if (prevItem.kind !== 'music') a.discoveryDoorway.podcast++;
+          else if (prevItem.artist === p.artist) a.discoveryDoorway.dive++;
+          else a.discoveryDoorway.another++;
         }
 
         let set = trackSets.get(p.artist);
@@ -180,6 +193,8 @@ const Stats = (() => {
         const sE = bump(a.byShow, p.show, p.ms, counted);
         sE.kind = p.kind;
       }
+
+      if (counted) prevItem = p;
     }
 
     closeSession();

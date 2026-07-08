@@ -72,6 +72,8 @@ const Report = (() => {
     const a = Stats.aggregate(allPlays, { year: currentYear });
     if (a.empty) { body.appendChild(el('p', 'empty-note', 'No plays in this range.')); return; }
     const rangeLabel = currentYear == null ? 'all time' : String(currentYear);
+    const rangePlays = currentYear == null ? allPlays
+      : allPlays.filter(p => new Date(p.ts).getFullYear() === currentYear);
 
     // previous year, for last.fm-style vs-comparisons
     const prev = currentYear != null ? Stats.aggregate(allPlays, { year: currentYear - 1 }) : null;
@@ -218,6 +220,34 @@ const Report = (() => {
         ariaLabel: 'Share of first-time tracks per month',
         tableCols: ['Month', 'First-time tracks'],
       });
+
+      /* how discoveries began, and what played right before them */
+      const how = a.discoveryHow, door = a.discoveryDoorway;
+      const howTotal = how.chosen + how.flowed + how.shuffled + how.other;
+      const doorTotal = door.dive + door.another + door.podcast + door.opener;
+      if (howTotal >= 20 || doorTotal >= 20) {
+        const dGrid = el('div', 'card-grid');
+        dGrid.style.marginTop = '12px';
+        disc.appendChild(dGrid);
+        if (howTotal >= 20) {
+          const c1 = card(dGrid, 'How discoveries started', 'the press-play moment of each first listen');
+          c1.innerHTML += countTable([
+            ['You picked it yourself', how.chosen],
+            ['Autoplay / queue flowed into it', how.flowed],
+            ['Shuffle served it', how.shuffled],
+            ['Other', how.other],
+          ]);
+        }
+        if (doorTotal >= 20) {
+          const c2 = card(dGrid, 'The doorway', 'what was playing right before each first listen');
+          c2.innerHTML += countTable([
+            ['Deep in that artist already', door.dive],
+            ['Hopping from another artist', door.another],
+            ['Right after a podcast', door.podcast],
+            ['First play of the session', door.opener],
+          ]);
+        }
+      }
     }
 
     /* ---- eras timeline ---- */
@@ -250,6 +280,7 @@ const Report = (() => {
     enrichControls(artistSection, artistEntries, albumEntries, allPlays);
     genresSection(body, artistEntries, a);
     decadesSection(body, albumEntries);
+    constellationSection(body, artistEntries, rangePlays);
     topList(body, 'Top tracks', top(a.byTrack, 'plays'), {
       name: e => e.track,
       sub: e => e.artist,
@@ -324,8 +355,6 @@ const Report = (() => {
     }
 
     /* ---- recently played ---- */
-    const rangePlays = currentYear == null ? allPlays
-      : allPlays.filter(p => new Date(p.ts).getFullYear() === currentYear);
     const recent = rangePlays.filter(p => p.ms >= Stats.STREAM_MS).slice(-15).reverse();
     if (recent.length) {
       const rs = section(body, 'Recently played', currentYear == null ? 'your last 15 streams' : `the last 15 streams of ${rangeLabel}`);
@@ -627,6 +656,74 @@ const Report = (() => {
           <td class="num">${fmtPct(ms / coveredMs)}</td>
           <td class="num">${fmtMs(ms)}</td>
         </tr>`).join('')}</tbody></table>`;
+  }
+
+  /* small share table for labelled counts */
+  function countTable(rows) {
+    const shown = rows.filter(([, cnt]) => cnt > 0);
+    const total = shown.reduce((sum, [, cnt]) => sum + cnt, 0) || 1;
+    const max = Math.max(...shown.map(([, cnt]) => cnt), 1);
+    return `<table><tbody>${shown.map(([label, cnt]) => `
+      <tr>
+        <td class="t-name">${esc(label)}</td>
+        <td class="t-bar-wrap"><div class="t-bar-track"><div class="t-bar" style="width:${Math.max(1, Math.round((cnt / max) * 100))}%"></div></div></td>
+        <td class="num">${fmtPct(cnt / total)}</td>
+        <td class="num">${fmtInt(cnt)}</td>
+      </tr>`).join('')}</tbody></table>`;
+  }
+
+  /* artists that appear back to back in the same session, as a graph */
+  function constellationSection(parent, artistEntries, rangePlays) {
+    const topArtists = artistEntries.slice(0, 30).filter(e => e.plays >= 5);
+    if (topArtists.length < 8) return;
+    const idx = new Map(topArtists.map((e, i) => [e.key, i]));
+
+    const pairs = new Map();
+    let prevArtist = null, prevTs = 0;
+    for (const p of rangePlays) {
+      if (p.kind !== 'music' || p.ms < Stats.STREAM_MS) continue;
+      if (prevArtist && p.ts - prevTs <= 30 * 60_000 && prevArtist !== p.artist) {
+        const i = idx.get(prevArtist), j = idx.get(p.artist);
+        if (i != null && j != null) {
+          const key = i < j ? `${i}|${j}` : `${j}|${i}`;
+          pairs.set(key, (pairs.get(key) || 0) + 1);
+        }
+      }
+      prevArtist = p.artist; prevTs = p.ts;
+    }
+    const edges = [...pairs.entries()]
+      .map(([k, w]) => { const [i, j] = k.split('|').map(Number); return { a: i, b: j, w }; })
+      .filter(e => e.w >= 2)
+      .sort((x, y) => y.w - x.w)
+      .slice(0, 70);
+    if (edges.length < 5) return;
+
+    // color nodes by genre when enrichment has run
+    const genreTotals = new Map();
+    for (const e of topArtists) {
+      const g = Enrich.get(e.key)?.g;
+      if (g) genreTotals.set(g, (genreTotals.get(g) || 0) + e.ms);
+    }
+    const COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7'];
+    const topGenres = [...genreTotals.entries()].sort((x, y) => y[1] - x[1]).slice(0, 5).map(([g]) => g);
+    const colorOf = name => {
+      const g = Enrich.get(name)?.g;
+      const gi = g ? topGenres.indexOf(g) : -1;
+      return gi >= 0 ? COLORS[gi] : (genreTotals.size ? '#b0aea6' : Charts.MARK);
+    };
+    const nodes = topArtists.map(e => ({ id: e.key, ms: e.ms, color: colorOf(e.key) }));
+
+    const s = section(parent, 'Artist constellation',
+      'your top artists, linked when you play them back to back — related projects cluster together');
+    const c = card(s);
+    if (topGenres.length) {
+      c.innerHTML += `<div class="chart-legend">${topGenres.map((g, i) =>
+        `<span><i style="background:${COLORS[i]}"></i>${esc(g)}</span>`).join('')}<span><i style="background:#b0aea6"></i>Other / unknown</span></div>`;
+    }
+    Charts.constellation(c, nodes, edges, {
+      format: n => fmtMs(n.ms),
+      ariaLabel: 'Artist constellation: artists linked by back-to-back plays',
+    });
   }
 
   function countryName(code) {
