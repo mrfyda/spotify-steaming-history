@@ -123,6 +123,23 @@ const Report = (() => {
       compare: hasPrev ? { labels: [String(currentYear), String(currentYear - 1)] } : null,
     });
 
+    if (a.podcastMs > 0) {
+      const splitCard = card(grid1, 'Music vs podcasts', 'hours per month by type');
+      splitCard.style.gridColumn = '1 / -1';
+      Charts.stackedColumns(splitCard,
+        monthData.map(m => m.long),
+        [
+          { label: 'Music', color: '#2a78d6', values: monthData.map(m => m.musicMs / 3.6e6) },
+          { label: 'Podcasts', color: '#1baf7a', values: monthData.map(m => m.podcastMs / 3.6e6) },
+        ], {
+          height: 180,
+          formatValue: v => `${fmtInt(v)} h`,
+          tickEvery: (i) => monthData[i].tick,
+          ariaLabel: 'Hours per month, music versus podcasts',
+          periodLabel: 'Month',
+        });
+    }
+
     const clockCard = card(grid1, 'Listening clock', 'hours listened by time of day');
     Charts.columnChart(clockCard, a.byHour.map((e, h) => ({
       label: String(h),
@@ -356,6 +373,7 @@ const Report = (() => {
           : MONTH_SHORT[d.getMonth()],
         ms: e.ms, plays: e.plays,
         musicPlays: e.musicPlays || 0, newTracks: e.newTracks || 0,
+        musicMs: e.musicMs || 0, podcastMs: e.podcastMs || 0,
       });
       d.setMonth(d.getMonth() + 1);
     }

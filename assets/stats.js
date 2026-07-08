@@ -131,6 +131,7 @@ const Stats = (() => {
         }
         if (p.incognito) a.incognitoCount++;
         if (counted) monthE.musicPlays = (monthE.musicPlays || 0) + 1;
+        monthE.musicMs = (monthE.musicMs || 0) + p.ms;
 
         const artistE = bump(a.byArtist, p.artist, p.ms, counted);
         if (!artistE.series) artistE.series = new Array(seriesLen).fill(0);
@@ -175,6 +176,7 @@ const Stats = (() => {
         }
       } else {
         a.podcastMs += p.ms;
+        monthE.podcastMs = (monthE.podcastMs || 0) + p.ms;
         const sE = bump(a.byShow, p.show, p.ms, counted);
         sE.kind = p.kind;
       }
