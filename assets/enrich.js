@@ -14,8 +14,8 @@ const Enrich = (() => {
 
   // v3: v2 could contain permanent misses poisoned by rate-limit failures
   const CACHE_KEY = 'lh-artist-meta-v3';
-  const BURST = 30;            // first N requests run quickly
-  const BURST_DELAY = 300;     // ms between burst requests
+  const BURST = 12;            // first N requests run quickly (kept short: a fast
+  const BURST_DELAY = 600;     // burst can itself trip Apple's per-minute throttle)
   const CRUISE_DELAY = 3200;   // ms between background requests (~19/min)
   const MAX_PER_SESSION = 1000;
   const MAX_CONSECUTIVE_FAILURES = 8;
@@ -25,6 +25,28 @@ const Enrich = (() => {
 
   function persist() {
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(store)); } catch { /* storage full/blocked */ }
+  }
+
+  /* diagnostic trace of every attempt, copyable from the UI when things fail */
+  const LOG_MAX = 300;
+  const log = [];
+  let runStartedAt = null;
+  function logEntry(name, outcome, ms) {
+    if (log.length >= LOG_MAX) log.shift();
+    log.push({ t: Date.now(), name, outcome, ms });
+  }
+  function getLog() {
+    const lines = [
+      'Listening History — enrichment diagnostic log',
+      `page: ${location.href}`,
+      `userAgent: ${navigator.userAgent}`,
+      `online: ${navigator.onLine} · cached artists: ${Object.keys(store).length}`,
+      `run started: ${runStartedAt ? new Date(runStartedAt).toISOString() : 'never'}`,
+      state.error ? `stopped with error: ${state.error}` : `state: running=${state.running} done=${state.done}/${state.total}`,
+      '',
+      ...log.map(e => `+${((e.t - (runStartedAt || e.t)) / 1000).toFixed(1)}s  ${e.name} — ${e.outcome} (${e.ms}ms)`),
+    ];
+    return lines.join('\n');
   }
 
   let jsonpSeq = 0;
@@ -87,17 +109,28 @@ const Enrich = (() => {
     Object.assign(state, { running: true, done: 0, total: todo.length, stopRequested: false, error: null });
     notify();
 
+    runStartedAt = Date.now();
+    log.length = 0;
+
     let consecutiveFailures = 0;
+    let lastFailure = '';
     for (const name of todo) {
-      if (state.stopRequested) break;
+      if (state.stopRequested) { logEntry(name, 'stopped by user before this lookup', 0); break; }
+      const t0 = Date.now();
       try {
-        store[name] = await fetchArtist(name);
+        const meta = await fetchArtist(name);
+        store[name] = meta;
         persist();
         consecutiveFailures = 0;
-      } catch {
+        logEntry(name, meta.g || meta.a ? `ok (genre: ${meta.g || '—'}, art: ${meta.a ? 'yes' : 'no'})` : 'no match on iTunes', Date.now() - t0);
+      } catch (err) {
         consecutiveFailures++;
+        lastFailure = err?.message || 'unknown';
+        logEntry(name, `FAILED: ${lastFailure} (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`, Date.now() - t0);
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          state.error = 'iTunes seems unreachable or rate-limiting. Progress is saved; try again later.';
+          state.error = lastFailure === 'network'
+            ? 'Requests to itunes.apple.com are being blocked — an ad/content blocker, Private Relay, or Lockdown Mode may be stopping them. Progress is saved.'
+            : 'iTunes seems unreachable or rate-limiting. Progress is saved; try again in a few minutes.';
           break;
         }
         await new Promise(r => setTimeout(r, CRUISE_DELAY * 2)); // extra backoff after a failure
@@ -114,5 +147,7 @@ const Enrich = (() => {
   const stop = () => { state.stopRequested = true; };
   const setOnUpdate = cb => { onUpdate = cb; };
 
-  return { get, pending, run, stop, state, setOnUpdate };
+  const hasLog = () => log.length > 0;
+
+  return { get, pending, run, stop, state, setOnUpdate, getLog, hasLog };
 })();

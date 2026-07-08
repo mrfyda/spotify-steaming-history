@@ -17,7 +17,7 @@ const Report = (() => {
     // appears within seconds), then periodically and at the end
     Enrich.setOnUpdate(s => {
       if (document.getElementById('report').hidden) return;
-      const milestone = !s.running || s.done === s.total || s.done === 0 || s.done === 30 || s.done % 120 === 0;
+      const milestone = !s.running || s.done === s.total || s.done === 0 || s.done === 12 || s.done % 120 === 0;
       if (milestone) {
         const y = window.scrollY;
         renderBody(allPlays);
@@ -402,11 +402,35 @@ const Report = (() => {
       bar.querySelector('#enrichStop').addEventListener('click', () => Enrich.stop());
     } else {
       bar.innerHTML = `<button class="chip" id="enrichBtn">Add genres &amp; artwork</button>
-        <span class="enrich-note">${s.error ? esc(s.error) + ' ' : ''}Looks up ${fmtInt(pendingCount)} artists on
+        <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up ${fmtInt(pendingCount)} artists on
         Apple's iTunes Search API. The first 30 are quick; the rest keep loading in the background
         (Apple allows about 20 lookups a minute). Only artist names are sent; nothing about your
         listening leaves the browser, and you can stop or resume anytime.</span>`;
       bar.querySelector('#enrichBtn').addEventListener('click', () => Enrich.run(names));
+    }
+
+    // copyable diagnostic trace, for when lookups fail
+    if (Enrich.hasLog()) {
+      const details = el('details', 'enrich-log',
+        `<summary>Lookup log${s.error ? ' (something went wrong — copy this if reporting a bug)' : ''}</summary>
+         <button class="chip" id="copyLog">Copy log</button>
+         <pre>${esc(Enrich.getLog())}</pre>`);
+      if (s.error) details.open = true;
+      bar.after(details);
+      const copyBtn = details.querySelector('#copyLog');
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(Enrich.getLog());
+          copyBtn.textContent = 'Copied ✓';
+          setTimeout(() => { copyBtn.textContent = 'Copy log'; }, 1600);
+        } catch {
+          // clipboard blocked: select the text so a manual copy works
+          const range = document.createRange();
+          range.selectNodeContents(details.querySelector('pre'));
+          const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+          copyBtn.textContent = 'Select + copy manually';
+        }
+      });
     }
   }
 
