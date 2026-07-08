@@ -263,6 +263,27 @@ const Report = (() => {
     if (a.offlineRate != null && a.offlineRate > 0) habit('Offline listening', fmtPct(a.offlineRate), 'of plays while offline');
     if (a.incognitoCount > 0) habit('Private sessions', fmtInt(a.incognitoCount) + ' plays', 'listened in incognito mode');
 
+    /* ---- listening fingerprint ---- */
+    if (a.fingerprint) {
+      const fpAxes = Object.keys(a.fingerprint);
+      const fpLayers = [{
+        label: currentYear == null ? 'All time' : rangeLabel,
+        color: Charts.MARK,
+        values: fpAxes.map(k => a.fingerprint[k]),
+      }];
+      if (hasPrev && prev.fingerprint) {
+        fpLayers.push({ label: String(currentYear - 1), color: '#8f8d86', values: fpAxes.map(k => prev.fingerprint[k]) });
+      }
+      const fpSec = section(body, 'Listening fingerprint',
+        hasPrev ? `the shape of your listening, ${rangeLabel} vs ${currentYear - 1}` : 'the shape of your listening');
+      const fpCard = card(fpSec);
+      fpCard.style.maxWidth = '620px';
+      Charts.radar(fpCard, fpAxes, fpLayers, { ariaLabel: 'Listening fingerprint' });
+      fpCard.appendChild(el('div', 'card-sub',
+        'Consistency: days with listening · Discovery: first-time tracks · Replay: streams of tracks you play 10+ times · ' +
+        'Concentration: time in your top 10 artists · Variety: distinct artists per stream'));
+    }
+
     /* ---- recently played ---- */
     const rangePlays = currentYear == null ? allPlays
       : allPlays.filter(p => new Date(p.ts).getFullYear() === currentYear);

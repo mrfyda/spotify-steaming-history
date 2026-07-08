@@ -463,6 +463,116 @@ const Charts = (() => {
     container.appendChild(det);
   }
 
+  /**
+   * Radar with 0..1 axes. layers: [{label, color, values[]}] — the first
+   * layer is the subject, later layers are de-emphasized references.
+   */
+  function radar(container, axes, layers, opts = {}) {
+    const W = 440, H = 310;
+    const cx = W / 2, cy = H / 2 + 4, R = 108;
+    const n = axes.length;
+    const ang = i => -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    const pt = (v, i) => [cx + Math.cos(ang(i)) * R * v, cy + Math.sin(ang(i)) * R * v];
+    const fmt = opts.formatValue || (v => `${Math.round(v * 100)}%`);
+
+    if (layers.length > 1) {
+      const legend = document.createElement('div');
+      legend.className = 'chart-legend';
+      legend.innerHTML = layers.map(l =>
+        `<span><i style="background:${l.color}"></i>${esc(l.label)}</span>`).join('');
+      container.appendChild(legend);
+    }
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('role', 'img');
+    if (opts.ariaLabel) svg.setAttribute('aria-label', opts.ariaLabel);
+
+    // recessive rings + spokes
+    for (const rv of [0.5, 1]) {
+      const ring = document.createElementNS(svgNS, 'circle');
+      ring.setAttribute('cx', cx); ring.setAttribute('cy', cy);
+      ring.setAttribute('r', R * rv);
+      ring.setAttribute('fill', 'none');
+      ring.setAttribute('stroke', '#e1e0d9');
+      ring.setAttribute('stroke-width', '1');
+      svg.appendChild(ring);
+    }
+    axes.forEach((_, i) => {
+      const [x, y] = pt(1, i);
+      const spoke = document.createElementNS(svgNS, 'line');
+      spoke.setAttribute('x1', cx); spoke.setAttribute('y1', cy);
+      spoke.setAttribute('x2', x); spoke.setAttribute('y2', y);
+      spoke.setAttribute('stroke', '#e1e0d9');
+      spoke.setAttribute('stroke-width', '1');
+      svg.appendChild(spoke);
+    });
+
+    // polygons, references first so the subject sits on top
+    [...layers].reverse().forEach(l => {
+      const pts = axes.map((_, i) => pt(Math.max(0.02, Math.min(1, l.values[i] || 0)), i));
+      const poly = document.createElementNS(svgNS, 'path');
+      poly.setAttribute('d', 'M' + pts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' L') + ' Z');
+      poly.setAttribute('fill', l.color);
+      poly.setAttribute('fill-opacity', '0.10');
+      poly.setAttribute('stroke', l.color);
+      poly.setAttribute('stroke-width', '2');
+      poly.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(poly);
+    });
+
+    // subject vertices: markers with a surface ring + generous hover targets
+    const subject = layers[0];
+    axes.forEach((axis, i) => {
+      const v = Math.max(0.02, Math.min(1, subject.values[i] || 0));
+      const [x, y] = pt(v, i);
+      const dot = document.createElementNS(svgNS, 'circle');
+      dot.setAttribute('cx', x); dot.setAttribute('cy', y);
+      dot.setAttribute('r', '4');
+      dot.setAttribute('fill', subject.color);
+      dot.setAttribute('stroke', '#fcfcfb');
+      dot.setAttribute('stroke-width', '2');
+      svg.appendChild(dot);
+      const hit = document.createElementNS(svgNS, 'circle');
+      hit.setAttribute('cx', x); hit.setAttribute('cy', y);
+      hit.setAttribute('r', '14');
+      hit.setAttribute('fill', 'transparent');
+      attachTip(hit, () => [axis,
+        layers.map(l => `${l.label}: ${fmt(l.values[i] || 0)}`).join('\n')]);
+      svg.appendChild(hit);
+    });
+
+    // axis labels just outside the outer ring
+    axes.forEach((axis, i) => {
+      const c = Math.cos(ang(i)), sN = Math.sin(ang(i));
+      const [x, y] = [cx + c * (R + 14), cy + sN * (R + 14)];
+      const t = document.createElementNS(svgNS, 'text');
+      t.setAttribute('x', x); t.setAttribute('y', y + (sN > 0.5 ? 8 : sN < -0.5 ? -2 : 4));
+      t.setAttribute('text-anchor', Math.abs(c) < 0.35 ? 'middle' : c > 0 ? 'start' : 'end');
+      t.setAttribute('fill', '#52514e');
+      t.setAttribute('font-size', '12');
+      t.textContent = axis;
+      svg.appendChild(t);
+    });
+
+    const fig = document.createElement('figure');
+    fig.className = 'chart chart--radar';
+    fig.appendChild(svg);
+    container.appendChild(fig);
+
+    // table twin with the exact values
+    const det = document.createElement('details');
+    det.className = 'chart-table';
+    det.innerHTML = `<summary>View as table</summary>`;
+    const table = document.createElement('table');
+    table.innerHTML =
+      `<thead><tr><th></th>${layers.map(l => `<th class="num">${esc(l.label)}</th>`).join('')}</tr></thead>` +
+      `<tbody>${axes.map((axis, i) => `<tr><td>${esc(axis)}</td>${layers.map(l => `<td class="num">${esc(fmt(l.values[i] || 0))}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    det.appendChild(table);
+    container.appendChild(det);
+  }
+
   /** Tiny inline bar sparkline for table rows. Returns an HTML string. */
   function sparklineHTML(values, { w = 104, h = 24 } = {}) {
     if (!values || !values.length) return '';
@@ -550,5 +660,5 @@ const Charts = (() => {
     container.appendChild(scroll);
   }
 
-  return { columnChart, stackedColumns, streamgraph, punchcard, sparklineHTML, calendar, attachTip, MARK };
+  return { columnChart, stackedColumns, streamgraph, radar, punchcard, sparklineHTML, calendar, attachTip, MARK };
 })();

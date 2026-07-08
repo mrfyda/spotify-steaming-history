@@ -318,6 +318,19 @@ const Stats = (() => {
     }
     a.nightArtist = night;
 
+    // listening fingerprint — five 0..1 axes for the radar
+    const artistsByMs = [...a.byArtist.values()].sort((x, y) => y.ms - x.ms);
+    const top10Ms = artistsByMs.slice(0, 10).reduce((sum, e) => sum + e.ms, 0);
+    let heavyPlays = 0;
+    for (const e of a.byTrack.values()) if (e.plays >= 10) heavyPlays += e.plays;
+    a.fingerprint = {
+      Consistency: Math.min(1, a.activeDays / a.daySpan),
+      Discovery: a.discoveryRate || 0,
+      Replay: a.musicStreams ? heavyPlays / a.musicStreams : 0,
+      Concentration: a.musicMs ? top10Ms / a.musicMs : 0,
+      Variety: Math.min(1, (a.uniqueArtists / Math.max(1, a.musicStreams)) / 0.25),
+    };
+
     // time-of-day shares (by ms)
     const hourMs = a.byHour.map(e => e.ms);
     const msTotal = hourMs.reduce((s, v) => s + v, 0) || 1;
