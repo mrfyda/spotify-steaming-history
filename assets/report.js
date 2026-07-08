@@ -209,7 +209,7 @@ const Report = (() => {
     });
     const albumEntries = top(a.byAlbum, 'ms');
     enrichControls(artistSection, artistEntries, albumEntries, allPlays);
-    genresSection(body, artistEntries);
+    genresSection(body, artistEntries, a);
     decadesSection(body, albumEntries);
     topList(body, 'Top tracks', top(a.byTrack, 'plays'), {
       name: e => e.track,
@@ -458,8 +458,10 @@ const Report = (() => {
   }
 
   /* genre share across ALL enriched artists, weighted by listening time */
-  function genresSection(parent, artistEntries) {
+  function genresSection(parent, artistEntries, a) {
     const byGenre = new Map();
+    const genreSeries = new Map();
+    const seriesLen = artistEntries.find(e => e.series)?.series.length || 0;
     let coveredMs = 0, coveredArtists = 0, totalMs = 0;
     for (const e of artistEntries) {
       totalMs += e.ms;
@@ -467,6 +469,11 @@ const Report = (() => {
       if (!g) continue;
       byGenre.set(g, (byGenre.get(g) || 0) + e.ms);
       coveredMs += e.ms; coveredArtists++;
+      if (e.series) {
+        let arr = genreSeries.get(g);
+        if (!arr) { arr = new Array(seriesLen).fill(0); genreSeries.set(g, arr); }
+        e.series.forEach((v, i) => { arr[i] += v; });
+      }
     }
     if (byGenre.size < 2) return;
     const s = section(parent, 'Genres',
@@ -487,6 +494,34 @@ const Report = (() => {
           <td class="num">${fmtPct(ms / coveredMs)}</td>
           <td class="num">${fmtMs(ms)}</td>
         </tr>`).join('')}</tbody></table>`;
+
+    /* genres over time — the last.fm "top tags" chart, as readable stacked columns */
+    if (genreSeries.size >= 2 && seriesLen > 1) {
+      const sum = arr => arr.reduce((acc, v) => acc + v, 0);
+      const ranked = [...genreSeries.entries()].sort((x, y) => sum(y[1]) - sum(x[1]));
+      // validated categorical palette (light), fixed slot order; tail folds into gray "Other"
+      const COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7'];
+      const chartSeries = ranked.slice(0, 5).map(([g, vals], i) =>
+        ({ label: g, color: COLORS[i], values: vals.map(v => v / 3.6e6) }));
+      const rest = ranked.slice(5);
+      if (rest.length) {
+        const other = new Array(seriesLen).fill(0);
+        for (const [, vals] of rest) vals.forEach((v, i) => { other[i] += v; });
+        chartSeries.push({ label: `Other (${fmtInt(rest.length)})`, color: '#c9c7bf', values: other.map(v => v / 3.6e6) });
+      }
+      const startYear = new Date(a.firstTs).getFullYear();
+      const periods = a.year == null
+        ? Array.from({ length: seriesLen }, (_, i) => String(startYear + i))
+        : MONTH_SHORT.slice(0, seriesLen);
+      const chartCard = card(s, 'Genres over time', `hours per ${a.year == null ? 'year' : 'month'} by genre`);
+      chartCard.style.marginTop = '12px';
+      Charts.stackedColumns(chartCard, periods, chartSeries, {
+        formatValue: v => fmtInt(v),
+        ariaLabel: 'Listening hours by genre over time',
+        periodLabel: a.year == null ? 'Year' : 'Month',
+        tickEvery: a.year == null && seriesLen > 16 ? (i, label) => (i % 2 === 0 ? label : null) : null,
+      });
+    }
   }
 
   function shareTable(entries, totalMs, label) {

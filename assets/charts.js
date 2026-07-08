@@ -217,6 +217,116 @@ const Charts = (() => {
     container.appendChild(legend);
   }
 
+  /**
+   * Stacked columns for part-to-whole over time (e.g. genres per year).
+   * periods: [label]; series: [{label, color, values[]}] parallel to periods.
+   */
+  function stackedColumns(container, periods, series, opts = {}) {
+    const H = opts.height || 230;
+    const W = 800;
+    const padL = 44, padR = 8, padT = 12, padB = 24;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const n = periods.length || 1;
+    const totals = periods.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] || 0), 0));
+    const maxV = niceMax(Math.max(...totals, 0));
+    const fmt = opts.formatValue || (v => v.toLocaleString('en-US'));
+
+    const slot = plotW / n;
+    const gap = Math.max(2, Math.min(6, slot * 0.25));
+    const barW = Math.max(1.5, Math.min(24, slot - gap));
+
+    // legend — required for two or more series
+    const legend = document.createElement('div');
+    legend.className = 'chart-legend';
+    legend.innerHTML = series.map(s =>
+      `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join('');
+    container.appendChild(legend);
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('role', 'img');
+    if (opts.ariaLabel) svg.setAttribute('aria-label', opts.ariaLabel);
+
+    const ticks = 4;
+    for (let i = 0; i <= ticks; i++) {
+      const v = (maxV / ticks) * i;
+      const y = padT + plotH - (v / maxV) * plotH;
+      const line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('x1', padL); line.setAttribute('x2', W - padR);
+      line.setAttribute('y1', y); line.setAttribute('y2', y);
+      line.setAttribute('stroke', i === 0 ? '#c3c2b7' : '#e1e0d9');
+      line.setAttribute('stroke-width', '1');
+      svg.appendChild(line);
+      if (i > 0) {
+        const t = document.createElementNS(svgNS, 'text');
+        t.setAttribute('x', padL - 6); t.setAttribute('y', y + 3.5);
+        t.setAttribute('text-anchor', 'end');
+        t.setAttribute('fill', '#898781'); t.setAttribute('font-size', '10');
+        t.textContent = fmt(v);
+        svg.appendChild(t);
+      }
+    }
+
+    periods.forEach((label, i) => {
+      const x = padL + slot * i + (slot - barW) / 2;
+      const g = document.createElementNS(svgNS, 'g');
+      let cum = 0;
+      const topIdx = [...series].reverse().find(s => (s.values[i] || 0) > 0);
+      for (const s of series) {
+        const v = s.values[i] || 0;
+        if (v <= 0) { continue; }
+        const segH = (v / maxV) * plotH;
+        const yTop = padT + plotH - ((cum + v) / maxV) * plotH;
+        const isTop = s === topIdx;
+        const drawH = Math.max(1, segH - (isTop ? 0 : 2)); // 2px surface gap between segments
+        const p = document.createElementNS(svgNS, 'path');
+        p.setAttribute('d', isTop
+          ? colPath(x, yTop, barW, segH)
+          : `M${x},${yTop + 2} h${barW} v${drawH} h${-barW} Z`);
+        p.setAttribute('fill', s.color);
+        g.appendChild(p);
+        cum += v;
+      }
+      const hit = document.createElementNS(svgNS, 'rect');
+      hit.setAttribute('x', padL + slot * i); hit.setAttribute('y', padT);
+      hit.setAttribute('width', slot); hit.setAttribute('height', plotH);
+      hit.setAttribute('fill', 'transparent');
+      g.appendChild(hit);
+      attachTip(g, () => [label,
+        series.filter(s => (s.values[i] || 0) > 0)
+          .map(s => `${s.label}: ${fmt(s.values[i])}`).join('\n') || 'nothing']);
+      svg.appendChild(g);
+
+      const tick = opts.tickEvery ? opts.tickEvery(i, label) : label;
+      if (tick != null) {
+        const t = document.createElementNS(svgNS, 'text');
+        t.setAttribute('x', padL + slot * i + slot / 2);
+        t.setAttribute('y', H - 8);
+        t.setAttribute('text-anchor', 'middle');
+        t.setAttribute('fill', '#898781'); t.setAttribute('font-size', '10');
+        t.textContent = tick;
+        svg.appendChild(t);
+      }
+    });
+
+    const fig = document.createElement('figure');
+    fig.className = 'chart';
+    fig.appendChild(svg);
+    container.appendChild(fig);
+
+    // table-view twin
+    const det = document.createElement('details');
+    det.className = 'chart-table';
+    det.innerHTML = `<summary>View as table</summary>`;
+    const table = document.createElement('table');
+    table.innerHTML =
+      `<thead><tr><th>${esc(opts.periodLabel || 'Period')}</th>${series.map(s => `<th class="num">${esc(s.label)}</th>`).join('')}</tr></thead>` +
+      `<tbody>${periods.map((label, i) => `<tr><td>${esc(label)}</td>${series.map(s => `<td class="num">${esc(fmt(s.values[i] || 0))}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    det.appendChild(table);
+    container.appendChild(det);
+  }
+
   /** Tiny inline bar sparkline for table rows. Returns an HTML string. */
   function sparklineHTML(values, { w = 104, h = 24 } = {}) {
     if (!values || !values.length) return '';
@@ -304,5 +414,5 @@ const Charts = (() => {
     container.appendChild(scroll);
   }
 
-  return { columnChart, punchcard, sparklineHTML, calendar, attachTip, MARK };
+  return { columnChart, stackedColumns, punchcard, sparklineHTML, calendar, attachTip, MARK };
 })();

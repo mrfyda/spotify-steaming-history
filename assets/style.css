@@ -228,7 +228,7 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
   box-shadow: 0 4px 14px rgba(11,11,11,.12);
 }
 .tooltip .tt-title { font-weight: 600; }
-.tooltip .tt-sub { color: var(--text-secondary); }
+.tooltip .tt-sub { color: var(--text-secondary); white-space: pre-line; }
 
 /* ---------- wrapped ---------- */
 #wrapped { width: 100%; }
