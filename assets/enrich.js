@@ -74,8 +74,27 @@ const Enrich = (() => {
     return credit.split(/\s*(?:&|,|\bfeat\.?\b|\bwith\b|\bx\b)\s*/i).some(part => norm(part) === target);
   }
 
-  /** Look up one artist. Returns {g, a, r} — empty object means a definite
-   *  no-match. Throws on network trouble (caller retries later). */
+  /* MusicBrainz fallback: real CORS support, genre tags, 1 req/sec limit.
+   * Used automatically when iTunes lookups keep failing (blocked or banned). */
+  const MB_TAG_BLOCKLIST = new Set(['seen live', 'favorites', 'favourites', 'spotify', 'usa', 'uk',
+    'american', 'british', 'german', 'french', 'male vocalists', 'female vocalists', 'under 2000 listeners']);
+  async function fetchArtistMB(name) {
+    const url = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(JSON.stringify(name))}&fmt=json&limit=5`;
+    const res = await fetch(url);
+    if (res.status === 503) throw new Error('musicbrainz rate limit');
+    if (!res.ok) throw new Error('musicbrainz http ' + res.status);
+    const data = await res.json();
+    const hit = (data.artists || []).find(r =>
+      r.score >= 90 && (norm(r.name) === norm(name) || (r.aliases || []).some(al => norm(al.name) === norm(name))));
+    if (!hit) return {};
+    const tag = (hit.tags || [])
+      .sort((x, y) => (y.count || 0) - (x.count || 0))
+      .find(t => !MB_TAG_BLOCKLIST.has(t.name.toLowerCase()));
+    return tag ? { g: tag.name.replace(/^./, c => c.toUpperCase()) } : {};
+  }
+
+  /** Look up one artist on iTunes. Returns {g, a, r} — empty object means a
+   *  definite no-match. Throws on network trouble (caller retries later). */
   async function fetchArtist(name) {
     const url = 'https://itunes.apple.com/search?media=music&entity=album&attribute=artistTerm&limit=5'
       + `&term=${encodeURIComponent(name)}`;
@@ -97,7 +116,7 @@ const Enrich = (() => {
   const pending = names => names.filter(n => !(n in store)).slice(0, MAX_PER_SESSION);
 
   /* run state, readable by the UI across re-renders */
-  const state = { running: false, done: 0, total: 0, stopRequested: false, error: null };
+  const state = { running: false, done: 0, total: 0, stopRequested: false, error: null, source: 'itunes' };
   let onUpdate = null;
   const notify = () => { try { onUpdate?.(state); } catch { /* UI gone */ } };
 
@@ -113,31 +132,40 @@ const Enrich = (() => {
     log.length = 0;
 
     let consecutiveFailures = 0;
-    let lastFailure = '';
     for (const name of todo) {
       if (state.stopRequested) { logEntry(name, 'stopped by user before this lookup', 0); break; }
       const t0 = Date.now();
       try {
-        const meta = await fetchArtist(name);
+        const meta = state.source === 'itunes' ? await fetchArtist(name) : await fetchArtistMB(name);
         store[name] = meta;
         persist();
         consecutiveFailures = 0;
-        logEntry(name, meta.g || meta.a ? `ok (genre: ${meta.g || '—'}, art: ${meta.a ? 'yes' : 'no'})` : 'no match on iTunes', Date.now() - t0);
+        logEntry(name, meta.g || meta.a
+          ? `ok via ${state.source} (genre: ${meta.g || '—'}, art: ${meta.a ? 'yes' : 'no'})`
+          : `no match on ${state.source}`, Date.now() - t0);
       } catch (err) {
         consecutiveFailures++;
-        lastFailure = err?.message || 'unknown';
-        logEntry(name, `FAILED: ${lastFailure} (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`, Date.now() - t0);
+        logEntry(name, `FAILED via ${state.source}: ${err?.message || 'unknown'} (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`, Date.now() - t0);
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          state.error = lastFailure === 'network'
-            ? 'Requests to itunes.apple.com are being blocked — an ad/content blocker, Private Relay, or Lockdown Mode may be stopping them. Progress is saved.'
-            : 'iTunes seems unreachable or rate-limiting. Progress is saved; try again in a few minutes.';
-          break;
+          if (state.source === 'itunes') {
+            // iTunes is blocked or has banned this IP — switch source and keep going.
+            // MusicBrainz has genre tags but no artwork; better than stopping.
+            state.source = 'musicbrainz';
+            consecutiveFailures = 0;
+            logEntry('(switching)', 'iTunes keeps failing — continuing with MusicBrainz (genres only, no artwork)', 0);
+            notify();
+          } else {
+            state.error = 'Both iTunes and MusicBrainz lookups are failing — the network may be blocking them. Progress is saved; try again later.';
+            break;
+          }
         }
         await new Promise(r => setTimeout(r, CRUISE_DELAY * 2)); // extra backoff after a failure
       }
       state.done++;
       notify();
-      await new Promise(r => setTimeout(r, state.done < BURST ? BURST_DELAY : CRUISE_DELAY));
+      const base = state.done < BURST ? BURST_DELAY : CRUISE_DELAY;
+      // MusicBrainz asks for at most 1 request per second
+      await new Promise(r => setTimeout(r, state.source === 'musicbrainz' ? Math.max(base, 1100) : base));
     }
 
     state.running = false;

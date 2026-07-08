@@ -403,9 +403,9 @@ const Report = (() => {
     } else {
       bar.innerHTML = `<button class="chip" id="enrichBtn">Add genres &amp; artwork</button>
         <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up ${fmtInt(pendingCount)} artists on
-        Apple's iTunes Search API. The first 30 are quick; the rest keep loading in the background
-        (Apple allows about 20 lookups a minute). Only artist names are sent; nothing about your
-        listening leaves the browser, and you can stop or resume anytime.</span>`;
+        Apple's iTunes Search API, falling back to MusicBrainz if iTunes is blocked. Lookups run
+        slowly in the background to respect their rate limits. Only artist names are sent; nothing
+        about your listening leaves the browser, and you can stop or resume anytime.</span>`;
       bar.querySelector('#enrichBtn').addEventListener('click', () => Enrich.run(names));
     }
 
@@ -447,7 +447,7 @@ const Report = (() => {
     }
     if (byGenre.size < 2) return;
     const s = section(parent, 'Genres',
-      `from ${fmtInt(coveredArtists)} artists covering ${fmtPct(coveredMs / Math.max(1, totalMs))} of your listening, via iTunes`);
+      `from ${fmtInt(coveredArtists)} artists covering ${fmtPct(coveredMs / Math.max(1, totalMs))} of your listening, via iTunes/MusicBrainz`);
     const c = card(s);
     let rows = [...byGenre.entries()].sort((x, y) => y[1] - x[1]);
     if (rows.length > 13) {
