@@ -207,17 +207,19 @@ const Report = (() => {
       sparkTitle: currentYear == null ? 'Trend by year' : 'Trend by month',
       rangeLabel,
     });
-    enrichControls(artistSection, artistEntries, allPlays);
+    const albumEntries = top(a.byAlbum, 'ms');
+    enrichControls(artistSection, artistEntries, albumEntries, allPlays);
     genresSection(body, artistEntries);
+    decadesSection(body, albumEntries);
     topList(body, 'Top tracks', top(a.byTrack, 'plays'), {
       name: e => e.track,
       sub: e => e.artist,
       sortBy: 'plays',
       rangeLabel,
     });
-    topList(body, 'Top albums', top(a.byAlbum, 'ms'), {
+    topList(body, 'Top albums', albumEntries, {
       name: e => e.album,
-      sub: e => e.artist,
+      sub: e => [Enrich.getAlbum(e.artist, e.album)?.y, e.artist].filter(Boolean).join(' · '),
       rangeLabel,
     });
     if (a.byShow.size) {
@@ -383,11 +385,28 @@ const Report = (() => {
     return s;
   }
 
-  /* opt-in iTunes enrichment (genre + artwork), scaled to the whole library */
-  function enrichControls(sectionEl, artistEntries, allPlays) {
-    // rank order; skip one-off artists that would dominate a long run for little coverage
-    const names = artistEntries.filter(e => e.plays >= 3 || e.ms >= 10 * 60_000).map(e => e.key);
-    const pendingCount = Enrich.pending(names).length;
+  /* take ranked entries until they cover `share` of listening time (bounded) */
+  function coverageSlice(entries, share, min, cap) {
+    const total = entries.reduce((sum, e) => sum + e.ms, 0) || 1;
+    const out = [];
+    let acc = 0;
+    for (const e of entries) {
+      out.push(e);
+      acc += e.ms;
+      if (out.length >= cap) break;
+      if (out.length >= min && acc / total >= share) break;
+    }
+    return out;
+  }
+
+  /* opt-in MusicBrainz enrichment: genres for the artists and release years
+   * for the albums that make up the bulk of the listening time */
+  function enrichControls(sectionEl, artistEntries, albumEntries, allPlays) {
+    const artistNames = coverageSlice(artistEntries.filter(e => e.plays >= 2), 0.9, 50, 400).map(e => e.key);
+    const albumPairs = coverageSlice(albumEntries.filter(e => e.plays >= 2), 0.85, 40, 250).map(e => [e.artist, e.album]);
+    const pendingA = Enrich.pendingArtists(artistNames);
+    const pendingAl = Enrich.pendingAlbums(albumPairs);
+    const pendingCount = pendingA.length + pendingAl.length;
     if (!pendingCount && !Enrich.state.running) return;
 
     const bar = el('div', 'enrich-bar');
@@ -395,18 +414,22 @@ const Report = (() => {
     const s = Enrich.state;
     if (s.running) {
       const remaining = s.total - s.done;
-      const eta = remaining > 15 ? ` · about ${Math.ceil(remaining * 3.2 / 60)} min left` : '';
-      bar.innerHTML = `<span class="enrich-note"><b>Fetching genres &amp; artwork… ${s.done}/${s.total}</b>${eta}
+      const eta = remaining > 15 ? ` · about ${Math.ceil(remaining * 1.2 / 60)} min left` : '';
+      bar.innerHTML = `<span class="enrich-note"><b>Fetching genres &amp; decades… ${s.done}/${s.total}</b>${eta}
         · keep browsing, progress is saved as it goes</span>
         <button class="chip" id="enrichStop">Stop</button>`;
       bar.querySelector('#enrichStop').addEventListener('click', () => Enrich.stop());
     } else {
-      bar.innerHTML = `<button class="chip" id="enrichBtn">Add genres &amp; artwork</button>
-        <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up ${fmtInt(pendingCount)} artists on
-        Apple's iTunes Search API, falling back to MusicBrainz if iTunes is blocked. Lookups run
-        slowly in the background to respect their rate limits. Only artist names are sent; nothing
-        about your listening leaves the browser, and you can stop or resume anytime.</span>`;
-      bar.querySelector('#enrichBtn').addEventListener('click', () => Enrich.run(names));
+      const mins = Math.max(1, Math.ceil(pendingCount * 1.2 / 60));
+      bar.innerHTML = `<button class="chip" id="enrichBtn">Add genres &amp; decades</button>
+        <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up the ${fmtInt(pendingA.length)} artists
+        and ${fmtInt(pendingAl.length)} albums that make up most of your listening on MusicBrainz
+        (about ${mins} min at their 1-request-per-second limit; runs in the background). Only artist and
+        album names are sent; nothing about your listening leaves the browser. Stop or resume anytime.</span>`;
+      bar.querySelector('#enrichBtn').addEventListener('click', () => Enrich.run([
+        ...pendingA.map(name => ({ type: 'artist', name })),
+        ...pendingAl.map(([artist, album]) => ({ type: 'album', artist, album })),
+      ]));
     }
 
     // copyable diagnostic trace, for when lookups fail
@@ -447,7 +470,7 @@ const Report = (() => {
     }
     if (byGenre.size < 2) return;
     const s = section(parent, 'Genres',
-      `from ${fmtInt(coveredArtists)} artists covering ${fmtPct(coveredMs / Math.max(1, totalMs))} of your listening, via iTunes/MusicBrainz`);
+      `from ${fmtInt(coveredArtists)} artists covering ${fmtPct(coveredMs / Math.max(1, totalMs))} of your listening, via MusicBrainz`);
     const c = card(s);
     let rows = [...byGenre.entries()].sort((x, y) => y[1] - x[1]);
     if (rows.length > 13) {
@@ -477,6 +500,34 @@ const Report = (() => {
           <td class="num">${fmtMs(e.ms)}</td>
         </tr>`).join('')}</tbody>`;
     return t;
+  }
+
+  /* listening time by album release decade, from enriched albums */
+  function decadesSection(parent, albumEntries) {
+    const byDecade = new Map();
+    let coveredMs = 0, coveredAlbums = 0, totalMs = 0;
+    for (const e of albumEntries) {
+      totalMs += e.ms;
+      const y = Enrich.getAlbum(e.artist, e.album)?.y;
+      if (!y) continue;
+      const decade = Math.floor(y / 10) * 10;
+      byDecade.set(decade, (byDecade.get(decade) || 0) + e.ms);
+      coveredMs += e.ms; coveredAlbums++;
+    }
+    if (byDecade.size < 2) return;
+    const s = section(parent, 'Music by decade',
+      `by album release year · ${fmtInt(coveredAlbums)} albums covering ${fmtPct(coveredMs / Math.max(1, totalMs))} of your listening, via MusicBrainz`);
+    const c = card(s);
+    const rows = [...byDecade.entries()].sort((x, y2) => x[0] - y2[0]);
+    const maxMs = Math.max(...rows.map(r => r[1]));
+    c.innerHTML += `<table><thead><tr><th>Decade</th><th class="t-bar-wrap"></th><th class="num">Share</th><th class="num">Time</th></tr></thead>
+      <tbody>${rows.map(([decade, ms]) => `
+        <tr>
+          <td class="t-name" style="width:70px">${decade}s</td>
+          <td class="t-bar-wrap"><div class="t-bar-track"><div class="t-bar" style="width:${Math.max(1, Math.round((ms / maxMs) * 100))}%"></div></div></td>
+          <td class="num">${fmtPct(ms / coveredMs)}</td>
+          <td class="num">${fmtMs(ms)}</td>
+        </tr>`).join('')}</tbody></table>`;
   }
 
   function countryName(code) {
