@@ -327,6 +327,142 @@ const Charts = (() => {
     container.appendChild(det);
   }
 
+  /* Catmull-Rom → cubic bezier through points [[x,y],…] */
+  function smoothPath(pts) {
+    if (pts.length < 3) return 'M' + pts.map(p => p.join(',')).join(' L');
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+      const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+      const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+      d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0]},${p2[1]}`;
+    }
+    return d;
+  }
+
+  const hexLuma = hex => {
+    const n = parseInt(hex.slice(1), 16);
+    return (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
+  };
+
+  /**
+   * Streamgraph (centered stacked area) for composition over time.
+   * periods: [label]; series: [{label, color, values[]}] parallel to periods.
+   * Values are only readable via tooltip + table twin, so both are built in.
+   */
+  function streamgraph(container, periods, series, opts = {}) {
+    const H = opts.height || 240;
+    const W = 800;
+    const padL = 10, padR = 10, padT = 14, padB = 26;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const n = periods.length;
+    const fmt = opts.formatValue || (v => v.toLocaleString('en-US'));
+
+    const totals = periods.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] || 0), 0));
+    const maxTotal = Math.max(...totals, 1);
+    const scale = plotH / maxTotal;
+    const centerY = padT + plotH / 2;
+    const xAt = i => padL + (n === 1 ? plotW / 2 : (i * plotW) / (n - 1));
+
+    // silhouette baseline: boundaries[k][i] in value units, boundaries[0] = -total/2
+    const boundaries = [periods.map((_, i) => -totals[i] / 2)];
+    series.forEach((s, k) => {
+      boundaries.push(periods.map((_, i) => boundaries[k][i] + (s.values[i] || 0)));
+    });
+    const yOf = (k, i) => centerY - boundaries[k][i] * scale;
+
+    const legend = document.createElement('div');
+    legend.className = 'chart-legend';
+    legend.innerHTML = series.map(s =>
+      `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join('');
+    container.appendChild(legend);
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('role', 'img');
+    if (opts.ariaLabel) svg.setAttribute('aria-label', opts.ariaLabel);
+
+    // bands, bottom to top
+    series.forEach((s, k) => {
+      const topPts = periods.map((_, i) => [xAt(i), yOf(k + 1, i)]);
+      const botPts = periods.map((_, i) => [xAt(i), yOf(k, i)]).reverse();
+      const path = document.createElementNS(svgNS, 'path');
+      path.setAttribute('d', `${smoothPath(topPts)} L${botPts[0][0]},${botPts[0][1]} ${smoothPath(botPts).replace(/^M[-\d.,]+/, '')} Z`);
+      path.setAttribute('fill', s.color);
+      svg.appendChild(path);
+    });
+
+    // 2px surface strokes on internal boundaries separate the bands
+    for (let k = 1; k < series.length; k++) {
+      const line = document.createElementNS(svgNS, 'path');
+      line.setAttribute('d', smoothPath(periods.map((_, i) => [xAt(i), yOf(k, i)])));
+      line.setAttribute('fill', 'none');
+      line.setAttribute('stroke', '#fcfcfb');
+      line.setAttribute('stroke-width', '2');
+      svg.appendChild(line);
+    }
+
+    // direct labels inside each band at its widest point (when it fits)
+    series.forEach((s, k) => {
+      let best = -1, bestPx = 0;
+      periods.forEach((_, i) => {
+        const px = (s.values[i] || 0) * scale;
+        if (px > bestPx) { bestPx = px; best = i; }
+      });
+      if (best < 0 || bestPx < 17) return;
+      const approxW = s.label.length * 7.5;
+      const x = Math.min(Math.max(xAt(best), padL + approxW / 2), W - padR - approxW / 2);
+      const t = document.createElementNS(svgNS, 'text');
+      t.setAttribute('x', x);
+      t.setAttribute('y', (yOf(k, best) + yOf(k + 1, best)) / 2 + 4);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('fill', hexLuma(s.color) > 0.6 ? '#0b0b0b' : '#ffffff');
+      t.setAttribute('font-size', '12');
+      t.setAttribute('font-weight', '600');
+      t.textContent = s.label;
+      svg.appendChild(t);
+    });
+
+    // per-period hover + x ticks
+    periods.forEach((label, i) => {
+      const slotW = plotW / Math.max(1, n - 1);
+      const hit = document.createElementNS(svgNS, 'rect');
+      hit.setAttribute('x', xAt(i) - slotW / 2); hit.setAttribute('y', padT);
+      hit.setAttribute('width', slotW); hit.setAttribute('height', plotH);
+      hit.setAttribute('fill', 'transparent');
+      attachTip(hit, () => [label,
+        series.filter(s => (s.values[i] || 0) > 0)
+          .map(s => `${s.label}: ${fmt(s.values[i])}`).join('\n') || 'nothing']);
+      svg.appendChild(hit);
+      const tick = opts.tickEvery ? opts.tickEvery(i, label) : label;
+      if (tick != null) {
+        const t = document.createElementNS(svgNS, 'text');
+        t.setAttribute('x', xAt(i)); t.setAttribute('y', H - 8);
+        t.setAttribute('text-anchor', 'middle');
+        t.setAttribute('fill', '#898781'); t.setAttribute('font-size', '10');
+        t.textContent = tick;
+        svg.appendChild(t);
+      }
+    });
+
+    const fig = document.createElement('figure');
+    fig.className = 'chart';
+    fig.appendChild(svg);
+    container.appendChild(fig);
+
+    // table-view twin — the honest numbers behind the pretty bands
+    const det = document.createElement('details');
+    det.className = 'chart-table';
+    det.innerHTML = `<summary>View as table</summary>`;
+    const table = document.createElement('table');
+    table.innerHTML =
+      `<thead><tr><th>${esc(opts.periodLabel || 'Period')}</th>${series.map(s => `<th class="num">${esc(s.label)}</th>`).join('')}</tr></thead>` +
+      `<tbody>${periods.map((label, i) => `<tr><td>${esc(label)}</td>${series.map(s => `<td class="num">${esc(fmt(s.values[i] || 0))}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    det.appendChild(table);
+    container.appendChild(det);
+  }
+
   /** Tiny inline bar sparkline for table rows. Returns an HTML string. */
   function sparklineHTML(values, { w = 104, h = 24 } = {}) {
     if (!values || !values.length) return '';
@@ -414,5 +550,5 @@ const Charts = (() => {
     container.appendChild(scroll);
   }
 
-  return { columnChart, stackedColumns, punchcard, sparklineHTML, calendar, attachTip, MARK };
+  return { columnChart, stackedColumns, streamgraph, punchcard, sparklineHTML, calendar, attachTip, MARK };
 })();

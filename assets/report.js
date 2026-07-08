@@ -515,12 +515,15 @@ const Report = (() => {
         : MONTH_SHORT.slice(0, seriesLen);
       const chartCard = card(s, 'Genres over time', `hours per ${a.year == null ? 'year' : 'month'} by genre`);
       chartCard.style.marginTop = '12px';
-      Charts.stackedColumns(chartCard, periods, chartSeries, {
-        formatValue: v => fmtInt(v),
+      const chartOpts = {
+        formatValue: v => `${fmtInt(v)} h`,
         ariaLabel: 'Listening hours by genre over time',
         periodLabel: a.year == null ? 'Year' : 'Month',
         tickEvery: a.year == null && seriesLen > 16 ? (i, label) => (i % 2 === 0 ? label : null) : null,
-      });
+      };
+      // the streamgraph needs a few points to flow; fall back to columns below that
+      if (seriesLen >= 3) Charts.streamgraph(chartCard, periods, chartSeries, chartOpts);
+      else Charts.stackedColumns(chartCard, periods, chartSeries, chartOpts);
     }
   }
 
