@@ -492,11 +492,17 @@ const Report = (() => {
   /* opt-in MusicBrainz enrichment: genres for the artists and release years
    * for the albums that make up the bulk of the listening time */
   function enrichControls(sectionEl, artistEntries, albumEntries, allPlays) {
-    const artistNames = coverageSlice(artistEntries.filter(e => e.plays >= 2), 0.9, 50, 400).map(e => e.key);
-    const albumPairs = coverageSlice(albumEntries.filter(e => e.plays >= 2), 0.85, 40, 250).map(e => [e.artist, e.album]);
-    const pendingA = Enrich.pendingArtists(artistNames);
-    const pendingAl = Enrich.pendingAlbums(albumPairs);
-    const pendingCount = pendingA.length + pendingAl.length;
+    const artistCand = coverageSlice(artistEntries.filter(e => e.plays >= 2), 0.9, 50, 400);
+    const albumCand = coverageSlice(albumEntries.filter(e => e.plays >= 2), 0.85, 40, 250);
+    const pendA = new Set(Enrich.pendingArtists(artistCand.map(e => e.key)));
+    const pendAl = new Set(Enrich.pendingAlbums(albumCand.map(e => [e.artist, e.album])).map(p => p.join('\t')));
+    // one queue ordered by listening time, artists and albums interleaved —
+    // stopping early still fills genres AND decades for what matters most
+    const queue = [
+      ...artistCand.filter(e => pendA.has(e.key)).map(e => ({ type: 'artist', name: e.key, ms: e.ms })),
+      ...albumCand.filter(e => pendAl.has(`${e.artist}\t${e.album}`)).map(e => ({ type: 'album', artist: e.artist, album: e.album, ms: e.ms })),
+    ].sort((x, y) => y.ms - x.ms);
+    const pendingCount = queue.length;
     if (!pendingCount && !Enrich.state.running) return;
 
     const bar = el('div', 'enrich-bar');
@@ -512,14 +518,11 @@ const Report = (() => {
     } else {
       const mins = Math.max(1, Math.ceil(pendingCount * 1.2 / 60));
       bar.innerHTML = `<button class="chip" id="enrichBtn">Add genres &amp; decades</button>
-        <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up the ${fmtInt(pendingA.length)} artists
-        and ${fmtInt(pendingAl.length)} albums that make up most of your listening on MusicBrainz
-        (about ${mins} min at their 1-request-per-second limit; runs in the background). Only artist and
-        album names are sent; nothing about your listening leaves the browser. Stop or resume anytime.</span>`;
-      bar.querySelector('#enrichBtn').addEventListener('click', () => Enrich.run([
-        ...pendingA.map(name => ({ type: 'artist', name })),
-        ...pendingAl.map(([artist, album]) => ({ type: 'album', artist, album })),
-      ]));
+        <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up the ${fmtInt(pendA.size)} artists
+        and ${fmtInt(pendAl.size)} albums that make up most of your listening on MusicBrainz, most-played
+        first (about ${mins} min at their 1-request-per-second limit; runs in the background). Only artist
+        and album names are sent; nothing about your listening leaves the browser. Stop or resume anytime.</span>`;
+      bar.querySelector('#enrichBtn').addEventListener('click', () => Enrich.run(queue));
     }
 
     // copyable diagnostic trace, for when lookups fail
