@@ -150,6 +150,28 @@ const Report = (() => {
       tableCols: ['Weekday', 'Listening'],
     });
 
+    const radialCard = card(grid1, 'Around the clock', 'the same day, as a dial');
+    Charts.radialClock(radialCard, a.byHour, {
+      format: h => `${fmtMs(h.ms)} · ${fmtInt(h.plays)} streams`,
+      hourLabel: i => `${fmtHour(i)}–${fmtHour((i + 1) % 24)}`,
+      ariaLabel: 'Radial listening clock',
+      tableCols: ['Hour', 'Listening'],
+    });
+    radialCard.insertAdjacentHTML('beforeend', `
+      <div class="clock-stats">
+        <div><div class="r-title">Busiest hour</div><div class="r-value">${esc(fmtHour(a.peakHour))}</div></div>
+        <div><div class="r-title">In that hour</div><div class="r-value">${esc(fmtMs(a.byHour[a.peakHour].ms))}</div></div>
+      </div>`);
+
+    if (hasPrev) {
+      const ratioCard = card(grid1, 'Music ratio', `unique tracks, albums and artists vs ${currentYear - 1}`);
+      Charts.ratioRings(ratioCard, [
+        { label: 'Tracks', cur: a.uniqueTracks, prev: prev.uniqueTracks, color: '#2a78d6' },
+        { label: 'Albums', cur: a.uniqueAlbums, prev: prev.uniqueAlbums, color: '#1baf7a' },
+        { label: 'Artists', cur: a.uniqueArtists, prev: prev.uniqueArtists, color: '#4a3aa7' },
+      ], { formatValue: fmtInt, prevLabel: `in ${currentYear - 1}`, ariaLabel: `Unique counts vs ${currentYear - 1}` });
+    }
+
     const punchCard = card(time, 'When you listen', 'weekday × hour heatmap');
     punchCard.style.marginTop = '12px';
     Charts.punchcard(punchCard, a.punch, WEEKDAYS, v => v ? fmtMs(v) : 'nothing');

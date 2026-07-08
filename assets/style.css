@@ -149,6 +149,15 @@ main { flex: 1; }
 .chart-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
 
 figure.chart { margin: 0; }
+.chart--radial svg { max-width: 360px; margin: 0 auto; }
+.clock-stats { display: flex; gap: 32px; justify-content: center; margin-top: 4px; }
+.clock-stats .r-title { color: var(--text-muted); font-size: .8rem; }
+.clock-stats .r-value { font-weight: 700; font-size: 1.05rem; }
+.ratio-stats { display: flex; gap: 24px; justify-content: center; margin-top: 12px; text-align: left; flex-wrap: wrap; }
+.ratio-stats .r-title { color: var(--text-muted); font-size: .8rem; }
+.ratio-stats .r-title i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; margin-right: 5px; }
+.ratio-stats .r-value { font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; }
+.ratio-stats .r-sub { color: var(--text-secondary); font-size: .8rem; }
 figure.chart svg { display: block; width: 100%; height: auto; }
 .chart-table { margin-top: 10px; }
 .chart-table summary { color: var(--text-muted); font-size: .82rem; cursor: pointer; }

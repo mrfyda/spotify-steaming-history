@@ -573,6 +573,156 @@ const Charts = (() => {
     container.appendChild(det);
   }
 
+  /**
+   * Radial 24-hour listening clock. hours: 24 × {ms, plays}.
+   * Radius encodes time listened; midnight at the top.
+   */
+  function radialClock(container, hours, opts = {}) {
+    const W = 400, H = 320;
+    const cx = W / 2, cy = H / 2, r0 = 42, R = 132;
+    const maxV = Math.max(...hours.map(h => h.ms), 1);
+    const fmt = opts.format || (h => `${h.ms}`);
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', opts.ariaLabel || 'Listening by hour of day, radial clock');
+
+    const arcPt = (r, aDeg) => {
+      const a = ((aDeg - 90) * Math.PI) / 180;
+      return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+    };
+
+    // recessive rings
+    for (const r of [r0, (r0 + R) / 2, R]) {
+      const ring = document.createElementNS(svgNS, 'circle');
+      ring.setAttribute('cx', cx); ring.setAttribute('cy', cy);
+      ring.setAttribute('r', r);
+      ring.setAttribute('fill', 'none');
+      ring.setAttribute('stroke', '#e1e0d9');
+      ring.setAttribute('stroke-width', '1');
+      svg.appendChild(ring);
+    }
+
+    hours.forEach((h, i) => {
+      const a0 = i * 15 + 1.2, a1 = (i + 1) * 15 - 1.2; // 15° per hour, ~2px gap
+      const val = h.ms / maxV;
+      const r1 = h.ms > 0 ? r0 + Math.max(2, (R - r0) * val) : r0;
+      if (h.ms > 0) {
+        const [x0i, y0i] = arcPt(r0, a0), [x1i, y1i] = arcPt(r0, a1);
+        const [x1o, y1o] = arcPt(r1, a1), [x0o, y0o] = arcPt(r1, a0);
+        const wedge = document.createElementNS(svgNS, 'path');
+        wedge.setAttribute('d',
+          `M${x0i.toFixed(1)},${y0i.toFixed(1)} A${r0},${r0} 0 0 1 ${x1i.toFixed(1)},${y1i.toFixed(1)} ` +
+          `L${x1o.toFixed(1)},${y1o.toFixed(1)} A${r1.toFixed(1)},${r1.toFixed(1)} 0 0 0 ${x0o.toFixed(1)},${y0o.toFixed(1)} Z`);
+        wedge.setAttribute('fill', MARK);
+        svg.appendChild(wedge);
+      }
+      // full-height invisible wedge as the hover target
+      const [hx0, hy0] = arcPt(r0, a0), [hx1, hy1] = arcPt(r0, a1);
+      const [Hx1, Hy1] = arcPt(R, a1), [Hx0, Hy0] = arcPt(R, a0);
+      const hit = document.createElementNS(svgNS, 'path');
+      hit.setAttribute('d',
+        `M${hx0},${hy0} A${r0},${r0} 0 0 1 ${hx1},${hy1} L${Hx1},${Hy1} A${R},${R} 0 0 0 ${Hx0},${Hy0} Z`);
+      hit.setAttribute('fill', 'transparent');
+      attachTip(hit, () => [opts.hourLabel ? opts.hourLabel(i) : String(i), fmt(h)]);
+      svg.appendChild(hit);
+    });
+
+    // compass hour labels outside the dial
+    [[0, '12am'], [6, '6am'], [12, '12pm'], [18, '6pm']].forEach(([hr, label]) => {
+      const [x, y] = arcPt(R + 13, hr * 15 + 7.5 - 7.5); // at the hour line
+      const t = document.createElementNS(svgNS, 'text');
+      t.setAttribute('x', x); t.setAttribute('y', y + (hr === 0 ? -2 : hr === 12 ? 10 : 4));
+      t.setAttribute('text-anchor', hr === 6 ? 'start' : hr === 18 ? 'end' : 'middle');
+      t.setAttribute('fill', '#898781');
+      t.setAttribute('font-size', '11');
+      t.textContent = label;
+      svg.appendChild(t);
+    });
+
+    const fig = document.createElement('figure');
+    fig.className = 'chart chart--radial';
+    fig.appendChild(svg);
+    container.appendChild(fig);
+
+    if (opts.tableCols) {
+      const det = document.createElement('details');
+      det.className = 'chart-table';
+      det.innerHTML = `<summary>View as table</summary>`;
+      const table = document.createElement('table');
+      table.innerHTML =
+        `<thead><tr><th>${esc(opts.tableCols[0])}</th><th class="num">${esc(opts.tableCols[1])}</th></tr></thead>` +
+        `<tbody>${hours.map((h, i) => `<tr><td>${esc(opts.hourLabel ? opts.hourLabel(i) : i)}</td><td class="num">${esc(fmt(h))}</td></tr>`).join('')}</tbody>`;
+      det.appendChild(table);
+      container.appendChild(det);
+    }
+  }
+
+  /**
+   * Concentric ratio rings: each entity's count as an arc vs its previous-
+   * period value (the last.fm "music ratio"). rows: [{label, cur, prev, color}].
+   */
+  function ratioRings(container, rows, opts = {}) {
+    const size = 250;
+    const cx = size / 2, cy = size / 2;
+    const width = 16, gap = 7;
+    const fmt = opts.formatValue || (v => String(v));
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', opts.ariaLabel || 'Unique counts vs the previous period');
+    svg.style.maxWidth = '250px';
+    svg.style.margin = '0 auto';
+    svg.style.display = 'block';
+
+    rows.forEach((row, i) => {
+      const r = size / 2 - 10 - i * (width + gap);
+      const c = 2 * Math.PI * r;
+      const frac = row.prev > 0 ? Math.min(1, row.cur / row.prev) : 1;
+      const track = document.createElementNS(svgNS, 'circle');
+      track.setAttribute('cx', cx); track.setAttribute('cy', cy); track.setAttribute('r', r);
+      track.setAttribute('fill', 'none');
+      track.setAttribute('stroke', '#efeeea');
+      track.setAttribute('stroke-width', width);
+      svg.appendChild(track);
+      const arc = document.createElementNS(svgNS, 'circle');
+      arc.setAttribute('cx', cx); arc.setAttribute('cy', cy); arc.setAttribute('r', r);
+      arc.setAttribute('fill', 'none');
+      arc.setAttribute('stroke', row.color);
+      arc.setAttribute('stroke-width', width);
+      arc.setAttribute('stroke-linecap', frac < 1 ? 'round' : 'butt');
+      arc.setAttribute('stroke-dasharray', `${(frac * c).toFixed(1)} ${c.toFixed(1)}`);
+      arc.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
+      svg.appendChild(arc);
+      const hit = document.createElementNS(svgNS, 'circle');
+      hit.setAttribute('cx', cx); hit.setAttribute('cy', cy); hit.setAttribute('r', r);
+      hit.setAttribute('fill', 'none');
+      hit.setAttribute('stroke', 'transparent');
+      hit.setAttribute('stroke-width', width + gap);
+      attachTip(hit, () => [row.label, `${fmt(row.cur)} vs ${fmt(row.prev)} ${opts.prevLabel || 'before'}`]);
+      svg.appendChild(hit);
+    });
+
+    const fig = document.createElement('figure');
+    fig.className = 'chart';
+    fig.appendChild(svg);
+    container.appendChild(fig);
+
+    const stats = document.createElement('div');
+    stats.className = 'ratio-stats';
+    stats.innerHTML = rows.map(row => `
+      <div>
+        <div class="r-title"><i style="background:${row.color}"></i>${esc(row.label)}</div>
+        <div class="r-value">${esc(fmt(row.cur))}</div>
+        <div class="r-sub">vs ${esc(fmt(row.prev))} ${esc(opts.prevLabel || '')}</div>
+      </div>`).join('');
+    container.appendChild(stats);
+  }
+
   /** Tiny inline bar sparkline for table rows. Returns an HTML string. */
   function sparklineHTML(values, { w = 104, h = 24 } = {}) {
     if (!values || !values.length) return '';
@@ -660,5 +810,5 @@ const Charts = (() => {
     container.appendChild(scroll);
   }
 
-  return { columnChart, stackedColumns, streamgraph, radar, punchcard, sparklineHTML, calendar, attachTip, MARK };
+  return { columnChart, stackedColumns, streamgraph, radar, radialClock, ratioRings, punchcard, sparklineHTML, calendar, attachTip, MARK };
 })();
