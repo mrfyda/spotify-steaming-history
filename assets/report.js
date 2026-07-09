@@ -131,8 +131,8 @@ const Report = (() => {
       Charts.stackedColumns(splitCard,
         monthData.map(m => m.long),
         [
-          { label: 'Music', color: '#2a78d6', values: monthData.map(m => m.musicMs / 3.6e6) },
-          { label: 'Podcasts', color: '#1baf7a', values: monthData.map(m => m.podcastMs / 3.6e6) },
+          { label: 'Music', color: Charts.theme().cat[0], values: monthData.map(m => m.musicMs / 3.6e6) },
+          { label: 'Podcasts', color: Charts.theme().cat[1], values: monthData.map(m => m.podcastMs / 3.6e6) },
         ], {
           height: 180,
           formatValue: v => `${fmtInt(v)} h`,
@@ -185,9 +185,9 @@ const Report = (() => {
     if (hasPrev) {
       const ratioCard = card(grid1, 'Music ratio', `unique tracks, albums and artists vs ${currentYear - 1}`);
       Charts.ratioRings(ratioCard, [
-        { label: 'Tracks', cur: a.uniqueTracks, prev: prev.uniqueTracks, color: '#2a78d6' },
-        { label: 'Albums', cur: a.uniqueAlbums, prev: prev.uniqueAlbums, color: '#1baf7a' },
-        { label: 'Artists', cur: a.uniqueArtists, prev: prev.uniqueArtists, color: '#4a3aa7' },
+        { label: 'Tracks', cur: a.uniqueTracks, prev: prev.uniqueTracks, color: Charts.theme().cat[0] },
+        { label: 'Albums', cur: a.uniqueAlbums, prev: prev.uniqueAlbums, color: Charts.theme().cat[1] },
+        { label: 'Artists', cur: a.uniqueArtists, prev: prev.uniqueArtists, color: Charts.theme().cat[4] },
       ], { formatValue: fmtInt, prevLabel: `in ${currentYear - 1}`, ariaLabel: `Unique counts vs ${currentYear - 1}` });
     }
 
@@ -342,7 +342,7 @@ const Report = (() => {
         values: fpAxes.map(k => a.fingerprint[k]),
       }];
       if (hasPrev && prev.fingerprint) {
-        fpLayers.push({ label: String(currentYear - 1), color: '#8f8d86', values: fpAxes.map(k => prev.fingerprint[k]) });
+        fpLayers.push({ label: String(currentYear - 1), color: Charts.theme().grayLine, values: fpAxes.map(k => prev.fingerprint[k]) });
       }
       const fpSec = section(body, 'Listening fingerprint',
         hasPrev ? `the shape of your listening, ${rangeLabel} vs ${currentYear - 1}` : 'the shape of your listening');
@@ -594,14 +594,14 @@ const Report = (() => {
       const sum = arr => arr.reduce((acc, v) => acc + v, 0);
       const ranked = [...genreSeries.entries()].sort((x, y) => sum(y[1]) - sum(x[1]));
       // validated categorical palette (light), fixed slot order; tail folds into gray "Other"
-      const COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7'];
+      const COLORS = Charts.theme().cat;
       const chartSeries = ranked.slice(0, 5).map(([g, vals], i) =>
         ({ label: g, color: COLORS[i], values: vals.map(v => v / 3.6e6) }));
       const rest = ranked.slice(5);
       if (rest.length) {
         const other = new Array(seriesLen).fill(0);
         for (const [, vals] of rest) vals.forEach((v, i) => { other[i] += v; });
-        chartSeries.push({ label: `Other (${fmtInt(rest.length)})`, color: '#c9c7bf', values: other.map(v => v / 3.6e6) });
+        chartSeries.push({ label: `Other (${fmtInt(rest.length)})`, color: Charts.theme().otherBand, values: other.map(v => v / 3.6e6) });
       }
       const startYear = new Date(a.firstTs).getFullYear();
       const periods = a.year == null
@@ -708,12 +708,12 @@ const Report = (() => {
       const g = Enrich.get(e.key)?.g;
       if (g) genreTotals.set(g, (genreTotals.get(g) || 0) + e.ms);
     }
-    const COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7'];
+    const COLORS = Charts.theme().cat;
     const topGenres = [...genreTotals.entries()].sort((x, y) => y[1] - x[1]).slice(0, 5).map(([g]) => g);
     const colorOf = name => {
       const g = Enrich.get(name)?.g;
       const gi = g ? topGenres.indexOf(g) : -1;
-      return gi >= 0 ? COLORS[gi] : (genreTotals.size ? '#b0aea6' : Charts.MARK);
+      return gi >= 0 ? COLORS[gi] : (genreTotals.size ? Charts.theme().gray : Charts.MARK);
     };
     const nodes = topArtists.map(e => ({ id: e.key, ms: e.ms, color: colorOf(e.key) }));
 
@@ -722,7 +722,7 @@ const Report = (() => {
     const c = card(s);
     if (topGenres.length) {
       c.innerHTML += `<div class="chart-legend">${topGenres.map((g, i) =>
-        `<span><i style="background:${COLORS[i]}"></i>${esc(g)}</span>`).join('')}<span><i style="background:#b0aea6"></i>Other / unknown</span></div>`;
+        `<span><i style="background:${COLORS[i]}"></i>${esc(g)}</span>`).join('')}<span><i style="background:${Charts.theme().gray}"></i>Other / unknown</span></div>`;
     }
     Charts.constellation(c, nodes, edges, {
       format: n => fmtMs(n.ms),

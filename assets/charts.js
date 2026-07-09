@@ -4,9 +4,33 @@
  */
 const Charts = (() => {
 
-  const MARK = '#2a78d6';
-  const COMPARE = '#d3d1c9'; // de-emphasis gray for a previous-period series
-  const SEQ = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95']; // light→dark blue ramp (light surface)
+  /* theme tokens — both sets from the validated dataviz reference palette */
+  const LIGHT = {
+    mark: '#2a78d6', compare: '#d3d1c9',
+    seq: ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95'], // light→dark = less→more
+    cat: ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7'],
+    grid: '#e1e0d9', axis: '#c3c2b7', muted: '#898781', secondary: '#52514e',
+    surface: '#fcfcfb', edge: '#b8b6ae', track: '#efeeea',
+    gray: '#b0aea6', grayLine: '#8f8d86', otherBand: '#c9c7bf',
+  };
+  const DARK = {
+    mark: '#3987e5', compare: '#4a4a47',
+    seq: ['#0d366b', '#184f95', '#256abf', '#3987e5', '#5598e7', '#86b6ef'], // dark→bright = less→more
+    cat: ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9'],
+    grid: '#2c2c2a', axis: '#4a4a47', muted: '#898781', secondary: '#c3c2b7',
+    surface: '#1a1a19', edge: '#4c4c49', track: '#2c2c2a',
+    gray: '#6f6d67', grayLine: '#8f8d86', otherBand: '#3f3e3a',
+  };
+  let TH, MARK, COMPARE, SEQ, GRID, AXIS, MUTED, SECONDARY, SURFACE, EDGE, TRACK;
+  function applyTheme() {
+    const dark = typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
+    TH = dark ? DARK : LIGHT;
+    MARK = TH.mark; COMPARE = TH.compare; SEQ = TH.seq;
+    GRID = TH.grid; AXIS = TH.axis; MUTED = TH.muted; SECONDARY = TH.secondary;
+    SURFACE = TH.surface; EDGE = TH.edge; TRACK = TH.track;
+  }
+  applyTheme();
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch { /* old browsers */ }
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   /* ---------- tooltip singleton ---------- */
@@ -86,14 +110,14 @@ const Charts = (() => {
       const line = document.createElementNS(svgNS, 'line');
       line.setAttribute('x1', padL); line.setAttribute('x2', W - padR);
       line.setAttribute('y1', y); line.setAttribute('y2', y);
-      line.setAttribute('stroke', i === 0 ? '#c3c2b7' : '#e1e0d9');
+      line.setAttribute('stroke', i === 0 ? AXIS : GRID);
       line.setAttribute('stroke-width', '1');
       svg.appendChild(line);
       if (i > 0) {
         const t = document.createElementNS(svgNS, 'text');
         t.setAttribute('x', padL - 6); t.setAttribute('y', y + 3.5);
         t.setAttribute('text-anchor', 'end');
-        t.setAttribute('fill', '#898781'); t.setAttribute('font-size', '10');
+        t.setAttribute('fill', MUTED); t.setAttribute('font-size', '10');
         t.textContent = fmt(v);
         svg.appendChild(t);
       }
@@ -135,7 +159,7 @@ const Charts = (() => {
         t.setAttribute('x', padL + slot * i + slot / 2);
         t.setAttribute('y', H - 8);
         t.setAttribute('text-anchor', 'middle');
-        t.setAttribute('fill', '#898781'); t.setAttribute('font-size', '10');
+        t.setAttribute('fill', MUTED); t.setAttribute('font-size', '10');
         t.textContent = tick;
         svg.appendChild(t);
       }
@@ -255,14 +279,14 @@ const Charts = (() => {
       const line = document.createElementNS(svgNS, 'line');
       line.setAttribute('x1', padL); line.setAttribute('x2', W - padR);
       line.setAttribute('y1', y); line.setAttribute('y2', y);
-      line.setAttribute('stroke', i === 0 ? '#c3c2b7' : '#e1e0d9');
+      line.setAttribute('stroke', i === 0 ? AXIS : GRID);
       line.setAttribute('stroke-width', '1');
       svg.appendChild(line);
       if (i > 0) {
         const t = document.createElementNS(svgNS, 'text');
         t.setAttribute('x', padL - 6); t.setAttribute('y', y + 3.5);
         t.setAttribute('text-anchor', 'end');
-        t.setAttribute('fill', '#898781'); t.setAttribute('font-size', '10');
+        t.setAttribute('fill', MUTED); t.setAttribute('font-size', '10');
         t.textContent = fmt(v);
         svg.appendChild(t);
       }
@@ -304,7 +328,7 @@ const Charts = (() => {
         t.setAttribute('x', padL + slot * i + slot / 2);
         t.setAttribute('y', H - 8);
         t.setAttribute('text-anchor', 'middle');
-        t.setAttribute('fill', '#898781'); t.setAttribute('font-size', '10');
+        t.setAttribute('fill', MUTED); t.setAttribute('font-size', '10');
         t.textContent = tick;
         svg.appendChild(t);
       }
@@ -398,7 +422,7 @@ const Charts = (() => {
       const line = document.createElementNS(svgNS, 'path');
       line.setAttribute('d', smoothPath(periods.map((_, i) => [xAt(i), yOf(k, i)])));
       line.setAttribute('fill', 'none');
-      line.setAttribute('stroke', '#fcfcfb');
+      line.setAttribute('stroke', SURFACE);
       line.setAttribute('stroke-width', '2');
       svg.appendChild(line);
     }
@@ -440,7 +464,7 @@ const Charts = (() => {
         const t = document.createElementNS(svgNS, 'text');
         t.setAttribute('x', xAt(i)); t.setAttribute('y', H - 8);
         t.setAttribute('text-anchor', 'middle');
-        t.setAttribute('fill', '#898781'); t.setAttribute('font-size', '10');
+        t.setAttribute('fill', MUTED); t.setAttribute('font-size', '10');
         t.textContent = tick;
         svg.appendChild(t);
       }
@@ -473,7 +497,7 @@ const Charts = (() => {
     const n = axes.length;
     const ang = i => -Math.PI / 2 + (i * 2 * Math.PI) / n;
     const pt = (v, i) => [cx + Math.cos(ang(i)) * R * v, cy + Math.sin(ang(i)) * R * v];
-    const fmt = opts.formatValue || (v => `${Math.round(v * 100)}%`);
+    const fmt = opts.formatValue || (v => v > 0 && v * 100 < 0.5 ? '<1%' : `${Math.round(v * 100)}%`);
 
     if (layers.length > 1) {
       const legend = document.createElement('div');
@@ -495,7 +519,7 @@ const Charts = (() => {
       ring.setAttribute('cx', cx); ring.setAttribute('cy', cy);
       ring.setAttribute('r', R * rv);
       ring.setAttribute('fill', 'none');
-      ring.setAttribute('stroke', '#e1e0d9');
+      ring.setAttribute('stroke', GRID);
       ring.setAttribute('stroke-width', '1');
       svg.appendChild(ring);
     }
@@ -504,7 +528,7 @@ const Charts = (() => {
       const spoke = document.createElementNS(svgNS, 'line');
       spoke.setAttribute('x1', cx); spoke.setAttribute('y1', cy);
       spoke.setAttribute('x2', x); spoke.setAttribute('y2', y);
-      spoke.setAttribute('stroke', '#e1e0d9');
+      spoke.setAttribute('stroke', GRID);
       spoke.setAttribute('stroke-width', '1');
       svg.appendChild(spoke);
     });
@@ -531,7 +555,7 @@ const Charts = (() => {
       dot.setAttribute('cx', x); dot.setAttribute('cy', y);
       dot.setAttribute('r', '4');
       dot.setAttribute('fill', subject.color);
-      dot.setAttribute('stroke', '#fcfcfb');
+      dot.setAttribute('stroke', SURFACE);
       dot.setAttribute('stroke-width', '2');
       svg.appendChild(dot);
       const hit = document.createElementNS(svgNS, 'circle');
@@ -550,7 +574,7 @@ const Charts = (() => {
       const t = document.createElementNS(svgNS, 'text');
       t.setAttribute('x', x); t.setAttribute('y', y + (sN > 0.5 ? 8 : sN < -0.5 ? -2 : 4));
       t.setAttribute('text-anchor', Math.abs(c) < 0.35 ? 'middle' : c > 0 ? 'start' : 'end');
-      t.setAttribute('fill', '#52514e');
+      t.setAttribute('fill', SECONDARY);
       t.setAttribute('font-size', '12');
       t.textContent = axis;
       svg.appendChild(t);
@@ -600,7 +624,7 @@ const Charts = (() => {
       ring.setAttribute('cx', cx); ring.setAttribute('cy', cy);
       ring.setAttribute('r', r);
       ring.setAttribute('fill', 'none');
-      ring.setAttribute('stroke', '#e1e0d9');
+      ring.setAttribute('stroke', GRID);
       ring.setAttribute('stroke-width', '1');
       svg.appendChild(ring);
     }
@@ -636,7 +660,7 @@ const Charts = (() => {
       const t = document.createElementNS(svgNS, 'text');
       t.setAttribute('x', x); t.setAttribute('y', y + (hr === 0 ? -2 : hr === 12 ? 10 : 4));
       t.setAttribute('text-anchor', hr === 6 ? 'start' : hr === 18 ? 'end' : 'middle');
-      t.setAttribute('fill', '#898781');
+      t.setAttribute('fill', MUTED);
       t.setAttribute('font-size', '11');
       t.textContent = label;
       svg.appendChild(t);
@@ -686,7 +710,7 @@ const Charts = (() => {
       const track = document.createElementNS(svgNS, 'circle');
       track.setAttribute('cx', cx); track.setAttribute('cy', cy); track.setAttribute('r', r);
       track.setAttribute('fill', 'none');
-      track.setAttribute('stroke', '#efeeea');
+      track.setAttribute('stroke', TRACK);
       track.setAttribute('stroke-width', width);
       svg.appendChild(track);
       const arc = document.createElementNS(svgNS, 'circle');
@@ -797,7 +821,7 @@ const Charts = (() => {
       const line = document.createElementNS(svgNS, 'line');
       line.setAttribute('x1', pos[e.a][0].toFixed(1)); line.setAttribute('y1', pos[e.a][1].toFixed(1));
       line.setAttribute('x2', pos[e.b][0].toFixed(1)); line.setAttribute('y2', pos[e.b][1].toFixed(1));
-      line.setAttribute('stroke', '#b8b6ae');
+      line.setAttribute('stroke', EDGE);
       line.setAttribute('stroke-width', (1 + 3 * (e.w / maxW)).toFixed(1));
       line.setAttribute('stroke-opacity', (0.25 + 0.5 * (e.w / maxW)).toFixed(2));
       svg.appendChild(line);
@@ -818,7 +842,7 @@ const Charts = (() => {
       dot.setAttribute('cx', pos[i][0].toFixed(1)); dot.setAttribute('cy', pos[i][1].toFixed(1));
       dot.setAttribute('r', r.toFixed(1));
       dot.setAttribute('fill', n.color || MARK);
-      dot.setAttribute('stroke', '#fcfcfb');
+      dot.setAttribute('stroke', SURFACE);
       dot.setAttribute('stroke-width', '2');
       svg.appendChild(dot);
       const hit = document.createElementNS(svgNS, 'circle');
@@ -840,11 +864,11 @@ const Charts = (() => {
       t.setAttribute('x', pos[i][0].toFixed(1));
       t.setAttribute('y', (pos[i][1] - radius(nodes[i]) - 5).toFixed(1));
       t.setAttribute('text-anchor', 'middle');
-      t.setAttribute('fill', '#52514e');
+      t.setAttribute('fill', SECONDARY);
       t.setAttribute('font-size', '11');
       t.setAttribute('font-weight', '600');
       t.setAttribute('paint-order', 'stroke');
-      t.setAttribute('stroke', '#fcfcfb');
+      t.setAttribute('stroke', SURFACE);
       t.setAttribute('stroke-width', '3');
       t.textContent = nodes[i].id;
       svg.appendChild(t);
@@ -955,5 +979,5 @@ const Charts = (() => {
     container.appendChild(scroll);
   }
 
-  return { columnChart, stackedColumns, streamgraph, radar, radialClock, ratioRings, constellation, punchcard, sparklineHTML, calendar, attachTip, MARK };
+  return { columnChart, stackedColumns, streamgraph, radar, radialClock, ratioRings, constellation, punchcard, sparklineHTML, calendar, attachTip, theme: () => TH, get MARK() { return TH.mark; } };
 })();

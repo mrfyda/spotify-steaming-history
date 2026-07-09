@@ -410,7 +410,11 @@ const Stats = (() => {
     return `${m}m`;
   }
 
-  const fmtPct = x => `${Math.round(x * 100)}%`;
+  const fmtPct = x => {
+    const pct = x * 100;
+    if (x > 0 && pct < 0.5) return '<1%'; // tiny but real beats a misleading 0%
+    return `${Math.round(pct)}%`;
+  };
 
   function fmtDate(tsOrKey, opts = { year: 'numeric', month: 'short', day: 'numeric' }) {
     const d = typeof tsOrKey === 'string' ? new Date(tsOrKey + 'T12:00:00') : new Date(tsOrKey);

@@ -89,6 +89,16 @@
     if (!landing.hidden) handleFiles(e.dataTransfer.files);
   });
 
+  /* ---------- re-render charts when the system theme flips ---------- */
+  try {
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (!allPlays) return;
+      rendered.report = rendered.wrapped = false;
+      if (!reportEl.hidden) { Report.render(allPlays); rendered.report = true; }
+      else if (!wrappedEl.hidden) { Wrapped.render(allPlays); rendered.wrapped = true; }
+    });
+  } catch { /* old browsers: theme applies on next load */ }
+
   /* ---------- calendar reminder for the export wait ---------- */
   $('icsBtn').addEventListener('click', () => {
     const start = new Date(Date.now() + 14 * 86400000);
