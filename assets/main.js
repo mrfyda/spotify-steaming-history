@@ -30,6 +30,20 @@
   tabs.querySelectorAll('.tab').forEach(t =>
     t.addEventListener('click', () => showView(t.dataset.view)));
 
+  /* ---------- live-compare invites (?room=…) ---------- */
+  const invitedRoom = /^[a-z2-9]{6,32}$/.test(new URLSearchParams(location.search).get('room') || '');
+  if (invitedRoom) {
+    // tell the invitee why they're here before they even load a file
+    const note = document.createElement('div');
+    note.className = 'privacy invite-note';
+    note.innerHTML = '<div><strong>You’ve been invited to a live compare.</strong> Load your own history ' +
+      'below and the side-by-side comparison starts automatically — only a compact summary of artist ' +
+      'totals is exchanged, directly between your two browsers.</div>';
+    dropzone.parentElement.insertBefore(note, dropzone);
+  }
+  // the moment a live exchange completes, bring the comparison forward
+  document.addEventListener('compare:ready', () => { if (allPlays) showView('compare'); });
+
   $('resetBtn').addEventListener('click', () => {
     allPlays = null;
     invalidate();
@@ -67,7 +81,7 @@
       invalidate();
       Wrapped.reset();
       Compare.reset();
-      showView('report');
+      showView(invitedRoom ? 'compare' : 'report');
     } catch (err) {
       console.error(err);
       showError(err.message || 'Something went wrong reading that file.');
@@ -142,7 +156,7 @@
       invalidate();
       Wrapped.reset();
       Compare.reset();
-      showView('report');
+      showView(invitedRoom ? 'compare' : 'report');
     } finally {
       setBusy(false);
     }

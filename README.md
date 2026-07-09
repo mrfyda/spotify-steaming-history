@@ -35,8 +35,12 @@ Supported inputs: Spotify extended history zips (`Streaming_History_Audio_*.json
 fallback), or those same `.json`/`.csv` files dropped directly.
 
 A linkable demo with sample data lives at [`/demo`](https://mrfyda.github.io/spotify-steaming-history/demo/)
-(it redirects to `?demo`). The Compare tab lets two people diff their histories —
-both files are parsed locally, so the privacy promise holds for the friend too.
+(it redirects to `?demo`). The Compare tab lets two people diff their histories three ways:
+a live room (share a `?room=` link; both browsers swap compact summaries directly over an
+encrypted WebRTC data channel, with the handshake brokered through public nostr relays via
+Trystero — no server of ours), a ~100 KB summary file swapped over any chat, or the friend's
+full export dropped and parsed locally. Whatever the path, only artist totals and headline
+stats ever change hands, so the privacy promise holds for the friend too.
 
 ## Deployment
 
@@ -68,10 +72,12 @@ develop without a real export.
 | `assets/report/core.js` | Report shell: year filter, render loop, shared section/table helpers |
 | `assets/report/*.js` | Report sections (overview, library, highlights, storyline, discovery, time, insights); each registers onto `Report._sections` and renders in script order |
 | `assets/share.js` | Renders any chart card or top list to a branded PNG for the share sheet |
-| `assets/compare.js` | The Compare tab: parses a friend's export locally, taste match + face-off |
+| `assets/summary.js` | Compact compare summary (artist totals + headline stats): build, validate, download |
+| `assets/compare.js` | The Compare tab: live WebRTC rooms, summary files, or a locally parsed export — taste match + face-off |
 | `assets/wrapped.js` | The Wrapped slides + canvas share card |
 | `assets/sample.js` | Deterministic synthetic history for the demo button |
-| `assets/main.js` | Drop zone, progress, view switching |
+| `assets/main.js` | Drop zone, progress, view switching, live-compare invite routing |
+| `vendor/trystero-nostr.min.js` | Trystero (MIT), bundled from npm with esbuild — WebRTC rooms with nostr-relay signaling |
 
 A "stream" is counted when a play lasts ≥ 30 seconds (Spotify's own convention);
 time totals always include every millisecond.
