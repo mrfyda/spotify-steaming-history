@@ -139,7 +139,7 @@ main { flex: 1; }
 .wait-note { margin-top: 14px; color: var(--text-muted); font-size: .93rem; }
 
 /* ---------- report layout ---------- */
-#report { max-width: 1060px; margin: 0 auto; padding: 24px 24px 80px; width: 100%; }
+#report, #compare { max-width: 1060px; margin: 0 auto; padding: 24px 24px 80px; width: 100%; }
 
 .filter-row {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
@@ -364,8 +364,8 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
   .tabs { width: 100%; overflow-x: auto; scrollbar-width: none; }
   .tabs::-webkit-scrollbar { display: none; }
   .tab { padding: 6px 11px; font-size: .85rem; }
-  .tab-reset { font-size: .85rem; margin-left: auto; }
-  #report { padding: 16px 14px 60px; }
+  .tab-reset { font-size: .85rem; margin-left: auto; white-space: nowrap; }
+  #report, #compare { padding: 16px 14px 60px; }
   .filter-row {
     top: 58px;
     flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
