@@ -45,9 +45,11 @@
     constellationSection(body, artistEntries, rangePlays);
   });
 
-  /* the artists and albums that make up the bulk of the listening time,
-   * as one queue ordered by listening time with both types interleaved —
-   * stopping early still fills genres AND decades for what matters most.
+  /* the artists and albums that make up the bulk of the listening time.
+   * Each type stays in its own most-played-first order — albums carry far
+   * less time apiece than artists, so a merged time sort would starve the
+   * decades chart; instead Enrich.run alternates artist and album batches,
+   * so stopping early still fills genres AND decades for what matters most.
    * Batched OR-lookups made requests ~8x cheaper, so the slice reaches deep
    * into the tail: worst case ~300 requests (6–8 min), and only huge
    * libraries get near the caps. */
@@ -57,9 +59,9 @@
     const pendA = new Set(Enrich.pendingArtists(artistCand.map(e => e.key)));
     const pendAl = new Set(Enrich.pendingAlbums(albumCand.map(e => [e.artist, e.album])).map(p => p.join('\t')));
     const queue = [
-      ...artistCand.filter(e => pendA.has(e.key)).map(e => ({ type: 'artist', name: e.key, ms: e.ms })),
-      ...albumCand.filter(e => pendAl.has(`${e.artist}\t${e.album}`)).map(e => ({ type: 'album', artist: e.artist, album: e.album, ms: e.ms })),
-    ].sort((x, y) => y.ms - x.ms);
+      ...artistCand.filter(e => pendA.has(e.key)).map(e => ({ type: 'artist', name: e.key })),
+      ...albumCand.filter(e => pendAl.has(`${e.artist}\t${e.album}`)).map(e => ({ type: 'album', artist: e.artist, album: e.album })),
+    ];
     return { queue, artistCount: pendA.size, albumCount: pendAl.size };
   }
 
