@@ -223,7 +223,7 @@ figure.chart svg { display: block; width: 100%; height: auto; }
 .t-cell { display: flex; align-items: center; gap: 10px; }
 .t-art { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; background: var(--surface-3); flex: none; }
 .t-art--ph { background: var(--surface-3); }
-.enrich-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.enrich-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
 .enrich-note { color: var(--text-muted); font-size: .82rem; max-width: 560px; }
 .enrich-cta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .enrich-cta .empty-note { max-width: 560px; margin: 0; }

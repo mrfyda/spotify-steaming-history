@@ -10,7 +10,7 @@
     const albumEntries = top(a.byAlbum, 'ms');
     const enrich = buildEnrichQueue(artistEntries, albumEntries);
 
-    const artistSection = topList(body, 'Top artists', artistEntries, {
+    topList(body, 'Top artists', artistEntries, {
       name: e => e.key,
       sub: e => [Enrich.get(e.key)?.g, `${fmtInt(e.tracks || 0)} tracks`].filter(Boolean).join(' · '),
       art: e => Enrich.get(e.key)?.a,
@@ -18,7 +18,6 @@
       sparkTitle: a.year == null ? 'Trend by year' : 'Trend by month',
       rangeLabel,
     });
-    enrichBar(artistSection, enrich);
     topList(body, 'Top tracks', top(a.byTrack, 'plays'), {
       name: e => e.track,
       sub: e => e.artist,
@@ -37,17 +36,24 @@
         rangeLabel,
       });
     }
-    genresSection(body, artistEntries, a, enrich);
-    decadesSection(body, albumEntries, enrich);
+    const genresSec = genresSection(body, artistEntries, a, enrich);
+    const decadesSec = decadesSection(body, albumEntries, enrich);
+    // the coverage CTA / live progress lives with the data it feeds: at the
+    // foot of the first enrichment-backed section that already shows data
+    // (sections still in their empty state carry their own CTA)
+    enrichBar(genresSec || decadesSec, enrich);
     constellationSection(body, artistEntries, rangePlays);
   });
 
   /* the artists and albums that make up the bulk of the listening time,
    * as one queue ordered by listening time with both types interleaved —
-   * stopping early still fills genres AND decades for what matters most */
+   * stopping early still fills genres AND decades for what matters most.
+   * Batched OR-lookups made requests ~8x cheaper, so the slice reaches deep
+   * into the tail: worst case ~300 requests (6–8 min), and only huge
+   * libraries get near the caps. */
   function buildEnrichQueue(artistEntries, albumEntries) {
-    const artistCand = coverageSlice(artistEntries.filter(e => e.plays >= 2), 0.9, 50, 400);
-    const albumCand = coverageSlice(albumEntries.filter(e => e.plays >= 2), 0.85, 40, 250);
+    const artistCand = coverageSlice(artistEntries.filter(e => e.plays >= 2), 0.97, 50, 1200);
+    const albumCand = coverageSlice(albumEntries.filter(e => e.plays >= 2), 0.95, 40, 750);
     const pendA = new Set(Enrich.pendingArtists(artistCand.map(e => e.key)));
     const pendAl = new Set(Enrich.pendingAlbums(albumCand.map(e => [e.artist, e.album])).map(p => p.join('\t')));
     const queue = [
@@ -57,28 +63,31 @@
     return { queue, artistCount: pendA.size, albumCount: pendAl.size };
   }
 
-  /* opt-in MusicBrainz enrichment: the progress/start bar in Top artists */
+  /* opt-in MusicBrainz enrichment: the progress bar / improve-coverage CTA,
+   * appended to a section that already shows enriched data (or nowhere —
+   * empty-state sections render their own CTA via enrichEmptyState) */
   function enrichBar(sectionEl, { queue, artistCount, albumCount }) {
+    if (!sectionEl) return;
     if (!queue.length && !Enrich.state.running) return;
 
     const bar = el('div', 'enrich-bar');
-    sectionEl.insertBefore(bar, sectionEl.querySelector('.card'));
+    sectionEl.appendChild(bar);
     const s = Enrich.state;
     if (s.running) {
       const remaining = s.total - s.done;
       const msPerItem = s.done >= 8 ? (Date.now() - s.startedAt) / s.done : null;
       const eta = msPerItem && remaining > 10 ? ` · about ${Math.max(1, Math.ceil((remaining * msPerItem) / 60000))} min left` : '';
-      bar.innerHTML = `<span class="enrich-note"><b>Fetching genres &amp; decades… ${s.done}/${s.total}</b>${eta}
+      bar.innerHTML = `<span class="enrich-note"><b>Fetching genres &amp; decades… <span class="enrich-counter">${s.done}/${s.total}</span></b>${eta}
         · keep browsing, progress is saved as it goes</span>
         <button class="chip" id="enrichStop">Stop</button>`;
       bar.querySelector('#enrichStop').addEventListener('click', () => Enrich.stop());
     } else {
       const mins = Enrich.estimateMinutes(artistCount, albumCount);
-      bar.innerHTML = `<button class="chip enrich-start">Add genres &amp; decades</button>
-        <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up the ${fmtInt(artistCount)} artists
-        and ${fmtInt(albumCount)} albums that make up most of your listening on MusicBrainz, most-played
-        first in batched requests (about ${mins} min; runs in the background). Only artist and album names
-        are sent; nothing about your listening leaves the browser. Stop or resume anytime.</span>`;
+      bar.innerHTML = `<button class="chip enrich-start">Improve coverage</button>
+        <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up ${fmtInt(artistCount)} more artists
+        and ${fmtInt(albumCount)} more albums on MusicBrainz, most-played first in batched requests
+        (about ${mins} min; runs in the background). Only artist and album names are sent; nothing
+        about your listening leaves the browser. Stop or resume anytime.</span>`;
       bar.querySelector('.enrich-start').addEventListener('click', () => Enrich.run(queue));
     }
   }
@@ -91,7 +100,12 @@
     const sec = section(parent, title, 'via MusicBrainz, if you opt in');
     const c = card(sec);
     if (s.running) {
-      c.appendChild(el('p', 'empty-note', `Fetching from MusicBrainz… ${s.done}/${s.total}. This section fills in as results arrive.`));
+      const wrap = el('div', 'enrich-cta');
+      wrap.appendChild(el('p', 'empty-note', `Fetching from MusicBrainz… <span class="enrich-counter">${s.done}/${s.total}</span>. This section fills in as results arrive.`));
+      const btn = el('button', 'chip', 'Stop');
+      btn.addEventListener('click', () => Enrich.stop());
+      wrap.appendChild(btn);
+      c.appendChild(wrap);
     } else {
       const wrap = el('div', 'enrich-cta');
       wrap.appendChild(el('p', 'empty-note', esc(blurb)));
@@ -124,7 +138,7 @@
       enrichEmptyState(parent, 'Genres',
         'What do you actually listen to? One click looks up your top artists on MusicBrainz and breaks your listening down by genre — only artist and album names are sent, nothing about your listening leaves the browser.',
         enrich);
-      return;
+      return null;
     }
     const s = section(parent, 'Genres',
       `from ${fmtInt(coveredArtists)} artists covering ${fmtPct(coveredMs / Math.max(1, totalMs))} of your listening, via MusicBrainz`);
@@ -176,6 +190,7 @@
       else Charts.stackedColumns(chartCard, periods, chartSeries, chartOpts);
       shareChart(chartCard, 'My genres over time', `hours per ${a.year == null ? 'year' : 'month'} by genre, via MusicBrainz`);
     }
+    return s;
   }
 
   /* listening time by album release decade, from enriched albums */
@@ -194,7 +209,7 @@
       enrichEmptyState(parent, 'Music by decade',
         'Are you stuck in the 90s or living in the present? One click looks up your top albums on MusicBrainz and maps your listening to release decades — only artist and album names are sent, nothing about your listening leaves the browser.',
         enrich);
-      return;
+      return null;
     }
     const s = section(parent, 'Music by decade',
       `by album release year · ${fmtInt(coveredAlbums)} albums covering ${fmtPct(coveredMs / Math.max(1, totalMs))} of your listening, via MusicBrainz`);
@@ -209,6 +224,7 @@
           <td class="num">${fmtPct(ms / coveredMs)}</td>
           <td class="num">${fmtMs(ms)}</td>
         </tr>`).join('')}</tbody></table>`;
+    return s;
   }
 
   /* artists that appear back to back in the same session, as a graph */

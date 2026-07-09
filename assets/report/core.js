@@ -36,8 +36,7 @@ const Report = (() => {
         renderBody(allPlays);
         window.scrollTo(0, y);
       } else {
-        const counter = document.querySelector('.enrich-bar b');
-        if (counter) counter.textContent = `Fetching genres & decades… ${s.done}/${s.total}`;
+        document.querySelectorAll('.enrich-counter').forEach(n => { n.textContent = `${s.done}/${s.total}`; });
       }
     });
   }
