@@ -141,13 +141,23 @@ const Share = (() => {
     return canvas;
   }
 
-  /** Share via the system sheet when possible, otherwise download. */
-  async function deliver(canvas, filename) {
+  /** Share via the system sheet when possible, otherwise download.
+   *  The image footer shows the URL, but pixels aren't clickable — the
+   *  share payload carries a real link so posts arrive with a tappable way in. */
+  async function deliver(canvas, filename, title) {
     const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
     if (!blob) return;
     const file = new File([blob], filename, { type: 'image/png' });
+    const pageUrl = location.origin + location.pathname;
     if (navigator.canShare?.({ files: [file] })) {
-      try { await navigator.share({ files: [file] }); return; } catch { /* cancelled: fall through */ }
+      try {
+        await navigator.share({
+          files: [file],
+          title: title || 'My listening history',
+          text: `${title || 'My listening history'} — from my full streaming history. See yours at ${pageUrl}`,
+        });
+        return;
+      } catch { /* cancelled: fall through */ }
     }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -166,7 +176,7 @@ const Share = (() => {
     btn.textContent = '↗ Share';
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      try { await deliver(await build(), `${slug(title) || 'listening-history'}.png`); }
+      try { await deliver(await build(), `${slug(title) || 'listening-history'}.png`, title); }
       catch (err) { console.error(err); }
       finally { btn.disabled = false; }
     });
