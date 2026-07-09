@@ -56,8 +56,11 @@ develop without a real export.
 |---|---|
 | `assets/parser.js` | Reads zips/JSON (JSZip), normalizes all export formats into one record shape |
 | `assets/stats.js` | Aggregation engine — everything both views need, computed per time range |
-| `assets/charts.js` | Small SVG chart helpers: column chart, punchcard heatmap, tooltips, table twins |
-| `assets/report.js` | The exhaustive report view |
+| `assets/charts/core.js` | Chart plumbing: light/dark theme tokens, tooltip singleton, SVG + table-twin builders |
+| `assets/charts/*.js` | One chart type per file (columns, streamgraph, radial, grids, constellation), each attaching to `Charts` |
+| `assets/enrich.js` | Opt-in MusicBrainz lookups (genres, album years), batched and cached in localStorage |
+| `assets/report/core.js` | Report shell: year filter, render loop, shared section/table helpers |
+| `assets/report/*.js` | Report sections (overview, discovery, library, insights); each registers onto `Report._sections` and renders in script order |
 | `assets/wrapped.js` | The Wrapped slides + canvas share card |
 | `assets/sample.js` | Deterministic synthetic history for the demo button |
 | `assets/main.js` | Drop zone, progress, view switching |
