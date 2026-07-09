@@ -37,28 +37,6 @@ const Enrich = (() => {
     } catch { /* storage full/blocked */ }
   }
 
-  /* diagnostic trace, copyable from the UI when things fail */
-  const LOG_MAX = 300;
-  const log = [];
-  let runStartedAt = null;
-  function logEntry(name, outcome, ms) {
-    if (log.length >= LOG_MAX) log.shift();
-    log.push({ t: Date.now(), name, outcome, ms });
-  }
-  function getLog() {
-    const lines = [
-      'Listening History — enrichment diagnostic log (MusicBrainz, batched)',
-      `page: ${location.href}`,
-      `userAgent: ${navigator.userAgent}`,
-      `online: ${navigator.onLine} · cached: ${Object.keys(artists).length} artists, ${Object.keys(albums).length} albums`,
-      `run started: ${runStartedAt ? new Date(runStartedAt).toISOString() : 'never'}`,
-      state.error ? `stopped with error: ${state.error}` : `state: running=${state.running} done=${state.done}/${state.total}`,
-      '',
-      ...log.map(e => `+${((e.t - (runStartedAt || e.t)) / 1000).toFixed(1)}s  ${e.name} — ${e.outcome} (${e.ms}ms)`),
-    ];
-    return lines.join('\n');
-  }
-
   /* fold case + diacritics so "ROSALÍA" matches "Rosalía" */
   const norm = s => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
@@ -164,13 +142,11 @@ const Enrich = (() => {
   const pause = ms => new Promise(r => setTimeout(r, ms));
 
   /** One request with retries. Returns the result or null after RETRIES. */
-  async function attempt(label, fn) {
+  async function attempt(fn) {
     for (let i = 1; i <= RETRIES; i++) {
-      const t0 = Date.now();
       try {
         return await fn();
-      } catch (err) {
-        logEntry(label, `FAILED: ${err?.message || 'unknown'} (attempt ${i}/${RETRIES})`, Date.now() - t0);
+      } catch {
         if (i < RETRIES) await pause(2500 * i);
       }
     }
@@ -182,8 +158,6 @@ const Enrich = (() => {
   async function run(queue) {
     if (state.running) return;
     Object.assign(state, { running: true, done: 0, total: queue.length, stopRequested: false, error: null, startedAt: Date.now() });
-    runStartedAt = state.startedAt;
-    log.length = 0;
     notify();
 
     // alternate artist and album batches so both charts fill in together,
@@ -200,34 +174,28 @@ const Enrich = (() => {
     outer:
     for (const batch of batches) {
       if (state.stopRequested) break;
-      const t0 = Date.now();
-      const label = `batch of ${batch.items.length} ${batch.type}s`;
-      const found = await attempt(label, () => batch.type === 'artist'
+      const found = await attempt(() => batch.type === 'artist'
         ? fetchArtistBatch(batch.items.map(i => i.name))
         : fetchAlbumBatch(batch.items));
 
       const fallbacks = [];
       if (found == null) {
         consecutiveFailures++;
-        logEntry(label, 'gave up — items stay pending for the next run', Date.now() - t0);
-        state.done += batch.items.length;
+        state.done += batch.items.length; // items stay uncached, retried next run
       } else {
         consecutiveFailures = 0;
-        let matched = 0;
         for (const item of batch.items) {
           const key = batch.type === 'artist' ? item.name : albumKey(item.artist, item.album);
           if (found.has(key)) {
             const meta = found.get(key);
             if (batch.type === 'artist') artists[key] = { ...artists[key], ...meta };
             else albums[key] = meta;
-            matched++;
             state.done++;
           } else {
             fallbacks.push(item); // not covered by the batch response — try individually
           }
         }
         persist();
-        logEntry(label, `ok — ${matched} matched, ${fallbacks.length} to individual lookup`, Date.now() - t0);
       }
       notify();
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -238,9 +206,7 @@ const Enrich = (() => {
 
       for (const item of fallbacks) {
         if (state.stopRequested) break outer;
-        const t1 = Date.now();
-        const name = item.type === 'artist' ? item.name : `${item.artist} — ${item.album}`;
-        const meta = await attempt(name, () => item.type === 'artist'
+        const meta = await attempt(() => item.type === 'artist'
           ? fetchArtist(item.name)
           : fetchAlbum(item.artist, item.album));
         if (meta == null) {
@@ -250,7 +216,6 @@ const Enrich = (() => {
           if (item.type === 'artist') artists[item.name] = { ...artists[item.name], ...meta };
           else albums[albumKey(item.artist, item.album)] = meta;
           persist();
-          logEntry(name, (meta.g || meta.y) ? `ok (${meta.g ? 'genre: ' + meta.g : 'year: ' + meta.y})` : 'no match', Date.now() - t1);
         }
         state.done++;
         notify();
@@ -268,7 +233,6 @@ const Enrich = (() => {
 
   const stop = () => { state.stopRequested = true; };
   const setOnUpdate = cb => { onUpdate = cb; };
-  const hasLog = () => log.length > 0;
 
-  return { get, getAlbum, pendingArtists, pendingAlbums, estimateMinutes, run, stop, state, setOnUpdate, getLog, hasLog };
+  return { get, getAlbum, pendingArtists, pendingAlbums, estimateMinutes, run, stop, state, setOnUpdate };
 })();

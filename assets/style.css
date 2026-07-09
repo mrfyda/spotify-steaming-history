@@ -217,15 +217,9 @@ figure.chart svg { display: block; width: 100%; height: auto; }
 .t-art--ph { background: var(--surface-3); }
 .enrich-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .enrich-note { color: var(--text-muted); font-size: .82rem; max-width: 560px; }
-#enrichBtn:disabled { opacity: .6; cursor: default; }
-.enrich-log { margin: 4px 0 12px; }
-.enrich-log summary { color: var(--text-muted); font-size: .82rem; cursor: pointer; }
-.enrich-log pre {
-  margin-top: 8px; padding: 12px; background: var(--surface-3); border-radius: 8px;
-  font-size: .72rem; line-height: 1.5; overflow-x: auto; max-height: 260px; overflow-y: auto;
-  user-select: all; -webkit-user-select: all;
-}
-.enrich-log #copyLog { margin-top: 8px; }
+.enrich-cta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.enrich-cta .empty-note { max-width: 560px; margin: 0; }
+.enrich-cta .chip { margin-bottom: 8px; }
 
 /* tables / top lists */
 table { width: 100%; border-collapse: collapse; font-size: .93rem; }

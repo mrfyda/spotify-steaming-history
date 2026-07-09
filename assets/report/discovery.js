@@ -1,10 +1,9 @@
-/* Report · discovery — first-time listening over time, how discoveries
- * started, and the eras timeline. */
+/* Report · discovery — first-time listening over time and how each
+ * discovery began. */
 (() => {
-  const { el, section, card, esc, countTable, MONTH_SHORT } = Report._h;
-  const { fmtInt, fmtMs, fmtPct } = Stats;
+  const { el, section, card, countTable } = Report._h;
+  const { fmtInt, fmtPct } = Stats;
 
-  /* ---- discovery ---- */
   Report._sections.push((body, { a, currentYear, monthData }) => {
     if (a.discoveryRate == null || monthData.length <= 1) return;
     const disc = section(body, 'Discovery',
@@ -52,22 +51,5 @@
         ]);
       }
     }
-  });
-
-  /* ---- eras timeline ---- */
-  Report._sections.push((body, { a, currentYear, rangeLabel }) => {
-    if (a.eras.length <= 1) return;
-    const erasSec = section(body, currentYear == null ? 'Your eras' : `${rangeLabel}, month by month`,
-      currentYear == null ? 'the artist who defined each year' : 'the artist who defined each month');
-    const eCard = card(erasSec);
-    const maxEra = Math.max(...a.eras.map(e => e.ms), 1);
-    eCard.innerHTML += `<table><thead><tr><th>${currentYear == null ? 'Year' : 'Month'}</th><th>Artist</th><th class="t-bar-wrap"></th><th class="num">Time</th></tr></thead>
-      <tbody>${a.eras.map(e => `
-        <tr>
-          <td class="rank" style="width:60px">${currentYear == null ? esc(e.period) : esc(MONTH_SHORT[Number(e.period.slice(5)) - 1])}</td>
-          <td class="t-name">${esc(e.artist)}</td>
-          <td class="t-bar-wrap"><div class="t-bar-track"><div class="t-bar" style="width:${Math.max(1, Math.round((e.ms / maxEra) * 100))}%"></div></div></td>
-          <td class="num">${fmtMs(e.ms)}</td>
-        </tr>`).join('')}</tbody></table>`;
   });
 })();

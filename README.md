@@ -60,7 +60,7 @@ develop without a real export.
 | `assets/charts/*.js` | One chart type per file (columns, streamgraph, radial, grids, constellation), each attaching to `Charts` |
 | `assets/enrich.js` | Opt-in MusicBrainz lookups (genres, album years), batched and cached in localStorage |
 | `assets/report/core.js` | Report shell: year filter, render loop, shared section/table helpers |
-| `assets/report/*.js` | Report sections (overview, discovery, library, insights); each registers onto `Report._sections` and renders in script order |
+| `assets/report/*.js` | Report sections (overview, library, highlights, discovery, time, insights); each registers onto `Report._sections` and renders in script order |
 | `assets/wrapped.js` | The Wrapped slides + canvas share card |
 | `assets/sample.js` | Deterministic synthetic history for the demo button |
 | `assets/main.js` | Drop zone, progress, view switching |

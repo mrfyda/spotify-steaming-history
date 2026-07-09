@@ -158,7 +158,7 @@ const Report = (() => {
     const more = el('button', 'show-more', 'Show more');
     c.appendChild(more);
 
-    let shown = 20;
+    let shown = 10;
     let filtered = entries;
 
     const maxMs = entries[0] ? entries[0][sortBy] : 1;
@@ -196,7 +196,7 @@ const Report = (() => {
       filtered = q
         ? entries.filter(e => (name(e) || '').toLowerCase().includes(q) || (sub && (sub(e) || '').toLowerCase().includes(q)))
         : entries;
-      shown = 20;
+      shown = 10;
       draw();
     });
     more.addEventListener('click', () => { shown += 50; draw(); });

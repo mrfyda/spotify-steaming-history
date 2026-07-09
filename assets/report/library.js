@@ -7,6 +7,9 @@
 
   Report._sections.push((body, { a, rangeLabel, rangePlays }) => {
     const artistEntries = top(a.byArtist, 'ms');
+    const albumEntries = top(a.byAlbum, 'ms');
+    const enrich = buildEnrichQueue(artistEntries, albumEntries);
+
     const artistSection = topList(body, 'Top artists', artistEntries, {
       name: e => e.key,
       sub: e => [Enrich.get(e.key)?.g, `${fmtInt(e.tracks || 0)} tracks`].filter(Boolean).join(' · '),
@@ -15,11 +18,7 @@
       sparkTitle: a.year == null ? 'Trend by year' : 'Trend by month',
       rangeLabel,
     });
-    const albumEntries = top(a.byAlbum, 'ms');
-    enrichControls(artistSection, artistEntries, albumEntries);
-    genresSection(body, artistEntries, a);
-    decadesSection(body, albumEntries);
-    constellationSection(body, artistEntries, rangePlays);
+    enrichBar(artistSection, enrich);
     topList(body, 'Top tracks', top(a.byTrack, 'plays'), {
       name: e => e.track,
       sub: e => e.artist,
@@ -38,23 +37,29 @@
         rangeLabel,
       });
     }
+    genresSection(body, artistEntries, a, enrich);
+    decadesSection(body, albumEntries, enrich);
+    constellationSection(body, artistEntries, rangePlays);
   });
 
-  /* opt-in MusicBrainz enrichment: genres for the artists and release years
-   * for the albums that make up the bulk of the listening time */
-  function enrichControls(sectionEl, artistEntries, albumEntries) {
+  /* the artists and albums that make up the bulk of the listening time,
+   * as one queue ordered by listening time with both types interleaved —
+   * stopping early still fills genres AND decades for what matters most */
+  function buildEnrichQueue(artistEntries, albumEntries) {
     const artistCand = coverageSlice(artistEntries.filter(e => e.plays >= 2), 0.9, 50, 400);
     const albumCand = coverageSlice(albumEntries.filter(e => e.plays >= 2), 0.85, 40, 250);
     const pendA = new Set(Enrich.pendingArtists(artistCand.map(e => e.key)));
     const pendAl = new Set(Enrich.pendingAlbums(albumCand.map(e => [e.artist, e.album])).map(p => p.join('\t')));
-    // one queue ordered by listening time, artists and albums interleaved —
-    // stopping early still fills genres AND decades for what matters most
     const queue = [
       ...artistCand.filter(e => pendA.has(e.key)).map(e => ({ type: 'artist', name: e.key, ms: e.ms })),
       ...albumCand.filter(e => pendAl.has(`${e.artist}\t${e.album}`)).map(e => ({ type: 'album', artist: e.artist, album: e.album, ms: e.ms })),
     ].sort((x, y) => y.ms - x.ms);
-    const pendingCount = queue.length;
-    if (!pendingCount && !Enrich.state.running) return;
+    return { queue, artistCount: pendA.size, albumCount: pendAl.size };
+  }
+
+  /* opt-in MusicBrainz enrichment: the progress/start bar in Top artists */
+  function enrichBar(sectionEl, { queue, artistCount, albumCount }) {
+    if (!queue.length && !Enrich.state.running) return;
 
     const bar = el('div', 'enrich-bar');
     sectionEl.insertBefore(bar, sectionEl.querySelector('.card'));
@@ -68,42 +73,37 @@
         <button class="chip" id="enrichStop">Stop</button>`;
       bar.querySelector('#enrichStop').addEventListener('click', () => Enrich.stop());
     } else {
-      const mins = Enrich.estimateMinutes(pendA.size, pendAl.size);
-      bar.innerHTML = `<button class="chip" id="enrichBtn">Add genres &amp; decades</button>
-        <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up the ${fmtInt(pendA.size)} artists
-        and ${fmtInt(pendAl.size)} albums that make up most of your listening on MusicBrainz, most-played
+      const mins = Enrich.estimateMinutes(artistCount, albumCount);
+      bar.innerHTML = `<button class="chip enrich-start">Add genres &amp; decades</button>
+        <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up the ${fmtInt(artistCount)} artists
+        and ${fmtInt(albumCount)} albums that make up most of your listening on MusicBrainz, most-played
         first in batched requests (about ${mins} min; runs in the background). Only artist and album names
         are sent; nothing about your listening leaves the browser. Stop or resume anytime.</span>`;
-      bar.querySelector('#enrichBtn').addEventListener('click', () => Enrich.run(queue));
+      bar.querySelector('.enrich-start').addEventListener('click', () => Enrich.run(queue));
     }
+  }
 
-    // copyable diagnostic trace, for when lookups fail
-    if (Enrich.hasLog()) {
-      const details = el('details', 'enrich-log',
-        `<summary>Lookup log${s.error ? ' (something went wrong — copy this if reporting a bug)' : ''}</summary>
-         <button class="chip" id="copyLog">Copy log</button>
-         <pre>${esc(Enrich.getLog())}</pre>`);
-      if (s.error) details.open = true;
-      bar.after(details);
-      const copyBtn = details.querySelector('#copyLog');
-      copyBtn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(Enrich.getLog());
-          copyBtn.textContent = 'Copied ✓';
-          setTimeout(() => { copyBtn.textContent = 'Copy log'; }, 1600);
-        } catch {
-          // clipboard blocked: select the text so a manual copy works
-          const range = document.createRange();
-          range.selectNodeContents(details.querySelector('pre'));
-          const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
-          copyBtn.textContent = 'Select + copy manually';
-        }
-      });
+  /* when a MusicBrainz-backed section has no data yet, show it anyway with
+   * the CTA (or live progress) in its empty state instead of hiding it */
+  function enrichEmptyState(parent, title, blurb, { queue }) {
+    const s = Enrich.state;
+    if (!queue.length && !s.running) return; // nothing left to fetch — data is just too thin
+    const sec = section(parent, title, 'via MusicBrainz, if you opt in');
+    const c = card(sec);
+    if (s.running) {
+      c.appendChild(el('p', 'empty-note', `Fetching from MusicBrainz… ${s.done}/${s.total}. This section fills in as results arrive.`));
+    } else {
+      const wrap = el('div', 'enrich-cta');
+      wrap.appendChild(el('p', 'empty-note', esc(blurb)));
+      const btn = el('button', 'chip', 'Add genres &amp; decades');
+      btn.addEventListener('click', () => Enrich.run(queue));
+      wrap.appendChild(btn);
+      c.appendChild(wrap);
     }
   }
 
   /* genre share across ALL enriched artists, weighted by listening time */
-  function genresSection(parent, artistEntries, a) {
+  function genresSection(parent, artistEntries, a, enrich) {
     const byGenre = new Map();
     const genreSeries = new Map();
     const seriesLen = artistEntries.find(e => e.series)?.series.length || 0;
@@ -120,7 +120,12 @@
         e.series.forEach((v, i) => { arr[i] += v; });
       }
     }
-    if (byGenre.size < 2) return;
+    if (byGenre.size < 2) {
+      enrichEmptyState(parent, 'Genres',
+        'What do you actually listen to? One click looks up your top artists on MusicBrainz and breaks your listening down by genre — only artist and album names are sent, nothing about your listening leaves the browser.',
+        enrich);
+      return;
+    }
     const s = section(parent, 'Genres',
       `from ${fmtInt(coveredArtists)} artists covering ${fmtPct(coveredMs / Math.max(1, totalMs))} of your listening, via MusicBrainz`);
     const c = card(s);
@@ -173,7 +178,7 @@
   }
 
   /* listening time by album release decade, from enriched albums */
-  function decadesSection(parent, albumEntries) {
+  function decadesSection(parent, albumEntries, enrich) {
     const byDecade = new Map();
     let coveredMs = 0, coveredAlbums = 0, totalMs = 0;
     for (const e of albumEntries) {
@@ -184,7 +189,12 @@
       byDecade.set(decade, (byDecade.get(decade) || 0) + e.ms);
       coveredMs += e.ms; coveredAlbums++;
     }
-    if (byDecade.size < 2) return;
+    if (byDecade.size < 2) {
+      enrichEmptyState(parent, 'Music by decade',
+        'Are you stuck in the 90s or living in the present? One click looks up your top albums on MusicBrainz and maps your listening to release decades — only artist and album names are sent, nothing about your listening leaves the browser.',
+        enrich);
+      return;
+    }
     const s = section(parent, 'Music by decade',
       `by album release year · ${fmtInt(coveredAlbums)} albums covering ${fmtPct(coveredMs / Math.max(1, totalMs))} of your listening, via MusicBrainz`);
     const c = card(s);
