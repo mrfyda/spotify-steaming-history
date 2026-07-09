@@ -510,18 +510,19 @@ const Report = (() => {
     const s = Enrich.state;
     if (s.running) {
       const remaining = s.total - s.done;
-      const eta = remaining > 15 ? ` · about ${Math.ceil(remaining * 1.2 / 60)} min left` : '';
+      const msPerItem = s.done >= 8 ? (Date.now() - s.startedAt) / s.done : null;
+      const eta = msPerItem && remaining > 10 ? ` · about ${Math.max(1, Math.ceil((remaining * msPerItem) / 60000))} min left` : '';
       bar.innerHTML = `<span class="enrich-note"><b>Fetching genres &amp; decades… ${s.done}/${s.total}</b>${eta}
         · keep browsing, progress is saved as it goes</span>
         <button class="chip" id="enrichStop">Stop</button>`;
       bar.querySelector('#enrichStop').addEventListener('click', () => Enrich.stop());
     } else {
-      const mins = Math.max(1, Math.ceil(pendingCount * 1.2 / 60));
+      const mins = Enrich.estimateMinutes(pendA.size, pendAl.size);
       bar.innerHTML = `<button class="chip" id="enrichBtn">Add genres &amp; decades</button>
         <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up the ${fmtInt(pendA.size)} artists
         and ${fmtInt(pendAl.size)} albums that make up most of your listening on MusicBrainz, most-played
-        first (about ${mins} min at their 1-request-per-second limit; runs in the background). Only artist
-        and album names are sent; nothing about your listening leaves the browser. Stop or resume anytime.</span>`;
+        first in batched requests (about ${mins} min; runs in the background). Only artist and album names
+        are sent; nothing about your listening leaves the browser. Stop or resume anytime.</span>`;
       bar.querySelector('#enrichBtn').addEventListener('click', () => Enrich.run(queue));
     }
 

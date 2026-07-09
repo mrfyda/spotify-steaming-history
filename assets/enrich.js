@@ -2,11 +2,17 @@
  * years (for the decades chart). Strictly triggered by a user click: only
  * artist and album NAMES are sent, nothing about listening.
  *
- * MusicBrainz allows ~1 request/second, so lookups run in the background at
- * that pace with a live counter. Every result persists immediately, so a run
- * can be stopped and resumed later. A failed lookup is retried up to 3 times
- * in place, and if it still fails it stays uncached and is retried on the
- * next run — failures are never recorded as permanent misses.
+ * Lookups are OR-BATCHED: one search request carries ~8 artist names (or ~5
+ * album+artist clauses), which multiplies throughput roughly 8x under
+ * MusicBrainz's 1-request/second limit. Lucene normalizes scores across the
+ * whole OR query, so batch results are matched by normalized-name equality,
+ * not score. Any name the batch response doesn't cover falls back to an
+ * individual lookup (the old, score-filtered path) before being declared a
+ * miss — batching never reduces recall.
+ *
+ * Every result persists immediately, so a run can be stopped and resumed.
+ * Failed requests retry with backoff; items that still fail stay uncached
+ * and are retried on the next run — failures are never cached as misses.
  *
  * (The artist cache key is shared with the earlier iTunes-based version, so
  * artwork fetched back then keeps displaying; MusicBrainz adds no artwork.)
@@ -15,9 +21,11 @@ const Enrich = (() => {
 
   const ARTIST_KEY = 'lh-artist-meta-v3';
   const ALBUM_KEY = 'lh-album-meta-v1';
-  const DELAY = 1150;          // MusicBrainz asks for at most 1 req/sec
-  const RETRIES = 3;           // attempts per item before moving on
-  const MAX_CONSECUTIVE_ITEM_FAILURES = 6;
+  const DELAY = 1150;          // between REQUESTS — MusicBrainz allows ~1/sec
+  const RETRIES = 3;           // attempts per request before giving up on it
+  const ARTIST_BATCH = 8;
+  const ALBUM_BATCH = 5;
+  const MAX_CONSECUTIVE_FAILURES = 6;
 
   const load = key => { try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { return {}; } };
   const artists = load(ARTIST_KEY);
@@ -29,7 +37,7 @@ const Enrich = (() => {
     } catch { /* storage full/blocked */ }
   }
 
-  /* diagnostic trace of every attempt, copyable from the UI when things fail */
+  /* diagnostic trace, copyable from the UI when things fail */
   const LOG_MAX = 300;
   const log = [];
   let runStartedAt = null;
@@ -39,7 +47,7 @@ const Enrich = (() => {
   }
   function getLog() {
     const lines = [
-      'Listening History — enrichment diagnostic log (MusicBrainz)',
+      'Listening History — enrichment diagnostic log (MusicBrainz, batched)',
       `page: ${location.href}`,
       `userAgent: ${navigator.userAgent}`,
       `online: ${navigator.onLine} · cached: ${Object.keys(artists).length} artists, ${Object.keys(albums).length} albums`,
@@ -54,8 +62,8 @@ const Enrich = (() => {
   /* fold case + diacritics so "ROSALÍA" matches "Rosalía" */
   const norm = s => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-  async function mbSearch(path, query) {
-    const url = `https://musicbrainz.org/ws/2/${path}/?query=${encodeURIComponent(query)}&fmt=json&limit=5`;
+  async function mbSearch(path, query, limit = 5) {
+    const url = `https://musicbrainz.org/ws/2/${path}/?query=${encodeURIComponent(query)}&fmt=json&limit=${limit}`;
     const res = await fetch(url);
     if (res.status === 503) throw new Error('rate limited');
     if (!res.ok) throw new Error('http ' + res.status);
@@ -65,16 +73,35 @@ const Enrich = (() => {
   const TAG_BLOCKLIST = new Set(['seen live', 'favorites', 'favourites', 'spotify', 'usa', 'uk',
     'american', 'british', 'german', 'french', 'male vocalists', 'female vocalists', 'under 2000 listeners']);
 
-  /** Genre for one artist. {} means a definite no-match; throws on network trouble. */
-  async function fetchArtist(name) {
-    const data = await mbSearch('artist', `artist:${JSON.stringify(name)}`);
-    const hit = (data.artists || []).find(r =>
-      r.score >= 90 && (norm(r.name) === norm(name) || (r.aliases || []).some(al => norm(al.name) === norm(name))));
-    if (!hit) return {};
+  function artistMeta(hit) {
     const tag = (hit.tags || [])
       .sort((x, y) => (y.count || 0) - (x.count || 0))
       .find(t => !TAG_BLOCKLIST.has(t.name.toLowerCase()));
     return tag ? { g: tag.name.replace(/^./, c => c.toUpperCase()) } : {};
+  }
+
+  const artistMatches = (hit, name) =>
+    norm(hit.name) === norm(name) || (hit.aliases || []).some(al => norm(al.name) === norm(name));
+
+  /** Individual artist lookup (fallback path). {} = definite no-match. */
+  async function fetchArtist(name) {
+    const data = await mbSearch('artist', `artist:${JSON.stringify(name)}`);
+    const hit = (data.artists || []).find(r => r.score >= 90 && artistMatches(r, name));
+    return hit ? artistMeta(hit) : {};
+  }
+
+  /** One search request for many artists. Returns Map name → meta for the
+   *  names the response covered; absent names go to the fallback path. */
+  async function fetchArtistBatch(names) {
+    const query = names.map(n => `artist:${JSON.stringify(n)}`).join(' OR ');
+    const data = await mbSearch('artist', query, 100);
+    const results = data.artists || [];
+    const found = new Map();
+    for (const name of names) {
+      const hit = results.find(r => artistMatches(r, name)); // score-ordered; scores dilute across OR
+      if (hit) found.set(name, artistMeta(hit));
+    }
+    return found;
   }
 
   /* Spotify album titles carry suffixes MusicBrainz doesn't use */
@@ -83,17 +110,38 @@ const Enrich = (() => {
     .replace(/\s*-\s*(\d{4}\s*)?(remaster(ed)?|deluxe|expanded).*$/i, '')
     .trim();
 
-  /** First release year for one album. {} means a definite no-match. */
+  const rgArtistMatches = (rg, artist) =>
+    (rg['artist-credit'] || []).some(c => norm(c.name) === norm(artist));
+
+  function rgYear(rg) {
+    const year = Number(String(rg['first-release-date']).slice(0, 4));
+    return isFinite(year) && year > 1900 ? { y: year } : {};
+  }
+
+  /** Individual album lookup (fallback path). {} = definite no-match. */
   async function fetchAlbum(artist, album) {
     const title = cleanTitle(album);
     const data = await mbSearch('release-group', `releasegroup:${JSON.stringify(title)} AND artist:${JSON.stringify(artist)}`);
     const hit = (data['release-groups'] || []).find(rg =>
-      rg.score >= 90 &&
-      (rg['artist-credit'] || []).some(c => norm(c.name) === norm(artist)) &&
-      rg['first-release-date']);
-    if (!hit) return {};
-    const year = Number(String(hit['first-release-date']).slice(0, 4));
-    return isFinite(year) && year > 1900 ? { y: year } : {};
+      rg.score >= 90 && rgArtistMatches(rg, artist) && rg['first-release-date']);
+    return hit ? rgYear(hit) : {};
+  }
+
+  /** One search request for many albums. Returns Map albumKey → meta. */
+  async function fetchAlbumBatch(items) {
+    const query = items
+      .map(it => `(releasegroup:${JSON.stringify(cleanTitle(it.album))} AND artist:${JSON.stringify(it.artist)})`)
+      .join(' OR ');
+    const data = await mbSearch('release-group', query, 100);
+    const results = data['release-groups'] || [];
+    const found = new Map();
+    for (const it of items) {
+      const title = norm(cleanTitle(it.album));
+      const hit = results.find(rg =>
+        norm(rg.title) === title && rgArtistMatches(rg, it.artist) && rg['first-release-date']);
+      if (hit) found.set(albumKey(it.artist, it.album), rgYear(hit));
+    }
+    return found;
   }
 
   const albumKey = (artist, album) => artist + '\u0000' + album;
@@ -102,67 +150,125 @@ const Enrich = (() => {
   const pendingArtists = names => names.filter(n => !(n in artists));
   const pendingAlbums = pairs => pairs.filter(([ar, al]) => !(albumKey(ar, al) in albums));
 
+  /** Rough request count → minutes, for the button's ETA. */
+  function estimateMinutes(artistCount, albumCount) {
+    const requests = Math.ceil(artistCount / ARTIST_BATCH) + Math.ceil(albumCount / ALBUM_BATCH);
+    return Math.max(1, Math.ceil((requests * 1.35 * (DELAY / 1000)) / 60)); // ~35% headroom for fallbacks
+  }
+
   /* run state, readable by the UI across re-renders */
-  const state = { running: false, done: 0, total: 0, stopRequested: false, error: null };
+  const state = { running: false, done: 0, total: 0, stopRequested: false, error: null, startedAt: null };
   let onUpdate = null;
   const notify = () => { try { onUpdate?.(state); } catch { /* UI gone */ } };
 
-  /** Process a queue of {type:'artist', name} / {type:'album', artist, album} items. */
+  const pause = ms => new Promise(r => setTimeout(r, ms));
+
+  /** One request with retries. Returns the result or null after RETRIES. */
+  async function attempt(label, fn) {
+    for (let i = 1; i <= RETRIES; i++) {
+      const t0 = Date.now();
+      try {
+        return await fn();
+      } catch (err) {
+        logEntry(label, `FAILED: ${err?.message || 'unknown'} (attempt ${i}/${RETRIES})`, Date.now() - t0);
+        if (i < RETRIES) await pause(2500 * i);
+      }
+    }
+    return null;
+  }
+
+  /** Process a queue of {type:'artist', name} / {type:'album', artist, album}
+   *  items: batched requests first, individual fallbacks for stragglers. */
   async function run(queue) {
     if (state.running) return;
-    Object.assign(state, { running: true, done: 0, total: queue.length, stopRequested: false, error: null });
-    runStartedAt = Date.now();
+    Object.assign(state, { running: true, done: 0, total: queue.length, stopRequested: false, error: null, startedAt: Date.now() });
+    runStartedAt = state.startedAt;
     log.length = 0;
     notify();
 
-    let consecutiveItemFailures = 0;
-    for (const item of queue) {
-      if (state.stopRequested) { logEntry(itemLabel(item), 'stopped by user before this lookup', 0); break; }
+    // alternate artist and album batches so both charts fill in together,
+    // preserving the queue's most-played-first order within each type
+    const artistQ = queue.filter(i => i.type === 'artist');
+    const albumQ = queue.filter(i => i.type === 'album');
+    const batches = [];
+    for (let a = 0, l = 0; a < artistQ.length || l < albumQ.length;) {
+      if (a < artistQ.length) { batches.push({ type: 'artist', items: artistQ.slice(a, a + ARTIST_BATCH) }); a += ARTIST_BATCH; }
+      if (l < albumQ.length) { batches.push({ type: 'album', items: albumQ.slice(l, l + ALBUM_BATCH) }); l += ALBUM_BATCH; }
+    }
 
-      let succeeded = false;
-      for (let attempt = 1; attempt <= RETRIES && !succeeded; attempt++) {
-        const t0 = Date.now();
-        try {
-          if (item.type === 'artist') {
-            const meta = await fetchArtist(item.name);
-            artists[item.name] = { ...artists[item.name], ...meta };
-            logEntry(item.name, meta.g ? `ok (genre: ${meta.g})` : 'no match', Date.now() - t0);
-          } else {
-            const meta = await fetchAlbum(item.artist, item.album);
-            albums[albumKey(item.artist, item.album)] = meta;
-            logEntry(itemLabel(item), meta.y ? `ok (year: ${meta.y})` : 'no match', Date.now() - t0);
-          }
-          persist();
-          succeeded = true;
-        } catch (err) {
-          logEntry(itemLabel(item), `FAILED: ${err?.message || 'unknown'} (attempt ${attempt}/${RETRIES})`, Date.now() - t0);
-          if (attempt < RETRIES) await new Promise(r => setTimeout(r, 2500 * attempt));
-        }
-      }
+    let consecutiveFailures = 0;
+    outer:
+    for (const batch of batches) {
+      if (state.stopRequested) break;
+      const t0 = Date.now();
+      const label = `batch of ${batch.items.length} ${batch.type}s`;
+      const found = await attempt(label, () => batch.type === 'artist'
+        ? fetchArtistBatch(batch.items.map(i => i.name))
+        : fetchAlbumBatch(batch.items));
 
-      if (succeeded) {
-        consecutiveItemFailures = 0;
+      const fallbacks = [];
+      if (found == null) {
+        consecutiveFailures++;
+        logEntry(label, 'gave up — items stay pending for the next run', Date.now() - t0);
+        state.done += batch.items.length;
       } else {
-        consecutiveItemFailures++; // stays uncached: retried on the next run
-        if (consecutiveItemFailures >= MAX_CONSECUTIVE_ITEM_FAILURES) {
-          state.error = 'MusicBrainz lookups keep failing — the network may be blocking them, or the service is down. Progress is saved; try again later.';
-          break;
+        consecutiveFailures = 0;
+        let matched = 0;
+        for (const item of batch.items) {
+          const key = batch.type === 'artist' ? item.name : albumKey(item.artist, item.album);
+          if (found.has(key)) {
+            const meta = found.get(key);
+            if (batch.type === 'artist') artists[key] = { ...artists[key], ...meta };
+            else albums[key] = meta;
+            matched++;
+            state.done++;
+          } else {
+            fallbacks.push(item); // not covered by the batch response — try individually
+          }
         }
+        persist();
+        logEntry(label, `ok — ${matched} matched, ${fallbacks.length} to individual lookup`, Date.now() - t0);
       }
-
-      state.done++;
       notify();
-      await new Promise(r => setTimeout(r, DELAY));
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        state.error = 'MusicBrainz lookups keep failing — the network may be blocking them, or the service is down. Progress is saved; try again later.';
+        break;
+      }
+      await pause(DELAY);
+
+      for (const item of fallbacks) {
+        if (state.stopRequested) break outer;
+        const t1 = Date.now();
+        const name = item.type === 'artist' ? item.name : `${item.artist} — ${item.album}`;
+        const meta = await attempt(name, () => item.type === 'artist'
+          ? fetchArtist(item.name)
+          : fetchAlbum(item.artist, item.album));
+        if (meta == null) {
+          consecutiveFailures++; // stays uncached: retried on the next run
+        } else {
+          consecutiveFailures = 0;
+          if (item.type === 'artist') artists[item.name] = { ...artists[item.name], ...meta };
+          else albums[albumKey(item.artist, item.album)] = meta;
+          persist();
+          logEntry(name, (meta.g || meta.y) ? `ok (${meta.g ? 'genre: ' + meta.g : 'year: ' + meta.y})` : 'no match', Date.now() - t1);
+        }
+        state.done++;
+        notify();
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          state.error = 'MusicBrainz lookups keep failing — the network may be blocking them, or the service is down. Progress is saved; try again later.';
+          break outer;
+        }
+        await pause(DELAY);
+      }
     }
 
     state.running = false;
     notify();
   }
 
-  const itemLabel = item => item.type === 'artist' ? item.name : `${item.artist} — ${item.album}`;
   const stop = () => { state.stopRequested = true; };
   const setOnUpdate = cb => { onUpdate = cb; };
   const hasLog = () => log.length > 0;
 
-  return { get, getAlbum, pendingArtists, pendingAlbums, run, stop, state, setOnUpdate, getLog, hasLog };
+  return { get, getAlbum, pendingArtists, pendingAlbums, estimateMinutes, run, stop, state, setOnUpdate, getLog, hasLog };
 })();
