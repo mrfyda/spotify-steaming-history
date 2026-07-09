@@ -412,7 +412,7 @@ const Stats = (() => {
 
   const fmtPct = x => {
     const pct = x * 100;
-    if (x > 0 && pct < 0.5) return '<1%'; // tiny but real beats a misleading 0%
+    if (x > 0 && pct < 1) return '<1%'; // anything real below 1% reads <1%, never 0% or a rounded-up 1%
     return `${Math.round(pct)}%`;
   };
 
