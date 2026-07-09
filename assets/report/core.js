@@ -201,7 +201,31 @@ const Report = (() => {
     });
     more.addEventListener('click', () => { shown += 50; draw(); });
     draw();
+
+    Share.button(c, `${title} ${rangeLabel}`, () => Share.listCard({
+      title,
+      sub: rangeLabel,
+      rows: entries.slice(0, 10).map(e => ({
+        name: name(e),
+        sub: sub ? sub(e) : '',
+        value: sortBy === 'plays' ? `${fmtInt(e.plays)} plays` : fmtMs(e.ms),
+      })),
+    }));
     return s;
+  }
+
+  /* share button for a card whose figure holds a single SVG chart;
+   * the card's HTML legend (if any) is re-drawn onto the image */
+  function shareChart(cardEl, title, sub) {
+    const svg = cardEl.querySelector('figure.chart svg');
+    if (!svg) return;
+    Share.button(cardEl, title, () => {
+      const legend = [...cardEl.querySelectorAll('.chart-legend span')].map(sp => ({
+        label: sp.textContent,
+        color: sp.querySelector('i')?.style.background || '#888',
+      }));
+      return Share.chartCard({ title, sub, legend }, svg);
+    });
   }
 
   function shareTable(entries, totalMs, label) {
@@ -254,6 +278,6 @@ const Report = (() => {
   return {
     render,
     _sections: [],
-    _h: { el, section, card, esc, WEEKDAYS, MONTH_SHORT, topList, shareTable, countTable, coverageSlice, countryName },
+    _h: { el, section, card, esc, WEEKDAYS, MONTH_SHORT, topList, shareTable, countTable, coverageSlice, countryName, shareChart },
   };
 })();

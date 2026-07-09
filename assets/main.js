@@ -3,23 +3,26 @@
   let allPlays = null;
 
   const $ = id => document.getElementById(id);
-  const landing = $('landing'), reportEl = $('report'), wrappedEl = $('wrapped');
+  const landing = $('landing'), reportEl = $('report'), wrappedEl = $('wrapped'), compareEl = $('compare');
   const tabs = $('viewTabs');
   const dropzone = $('dropzone'), fileInput = $('fileInput');
   const progress = $('progress'), progressText = $('progressText'), dropError = $('dropError');
 
   /* ---------- view switching ---------- */
-  const rendered = { report: false, wrapped: false };
+  const rendered = { report: false, wrapped: false, compare: false };
+  const invalidate = () => { rendered.report = rendered.wrapped = rendered.compare = false; };
 
   function showView(view) {
     landing.hidden = true;
     reportEl.hidden = view !== 'report';
     wrappedEl.hidden = view !== 'wrapped';
+    compareEl.hidden = view !== 'compare';
     tabs.hidden = false;
     tabs.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
     if (!rendered[view]) {
       if (view === 'report') Report.render(allPlays);
-      else Wrapped.render(allPlays);
+      else if (view === 'wrapped') Wrapped.render(allPlays);
+      else Compare.render(allPlays);
       rendered[view] = true;
     }
   }
@@ -29,12 +32,14 @@
 
   $('resetBtn').addEventListener('click', () => {
     allPlays = null;
-    rendered.report = rendered.wrapped = false;
+    invalidate();
     Wrapped.reset();
+    Compare.reset();
     $('reportBody').innerHTML = '';
     wrappedEl.innerHTML = '';
+    compareEl.innerHTML = '';
     tabs.hidden = true;
-    reportEl.hidden = wrappedEl.hidden = true;
+    reportEl.hidden = wrappedEl.hidden = compareEl.hidden = true;
     landing.hidden = false;
     fileInput.value = '';
     window.scrollTo({ top: 0 });
@@ -59,8 +64,9 @@
     try {
       const { plays } = await Parser.parseFiles([...files], t => { progressText.textContent = t; });
       allPlays = plays;
-      rendered.report = rendered.wrapped = false;
+      invalidate();
       Wrapped.reset();
+      Compare.reset();
       showView('report');
     } catch (err) {
       console.error(err);
@@ -93,9 +99,10 @@
   try {
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       if (!allPlays) return;
-      rendered.report = rendered.wrapped = false;
+      invalidate();
       if (!reportEl.hidden) { Report.render(allPlays); rendered.report = true; }
       else if (!wrappedEl.hidden) { Wrapped.render(allPlays); rendered.wrapped = true; }
+      else if (!compareEl.hidden) { Compare.render(allPlays); rendered.compare = true; }
     });
   } catch { /* old browsers: theme applies on next load */ }
 
@@ -125,18 +132,23 @@
     URL.revokeObjectURL(link.href);
   });
 
-  /* ---------- sample data ---------- */
-  $('sampleBtn').addEventListener('click', async () => {
+  /* ---------- sample data / linkable demo ---------- */
+  async function loadSample() {
     dropError.hidden = true;
     setBusy(true, 'Generating sample history…');
     await new Promise(r => setTimeout(r, 30));
     try {
       allPlays = Sample.generate();
-      rendered.report = rendered.wrapped = false;
+      invalidate();
       Wrapped.reset();
+      Compare.reset();
       showView('report');
     } finally {
       setBusy(false);
     }
-  });
+  }
+  $('sampleBtn').addEventListener('click', loadSample);
+
+  // ?demo — the same sample-data experience, but linkable
+  if (new URLSearchParams(location.search).has('demo')) loadSample();
 })();

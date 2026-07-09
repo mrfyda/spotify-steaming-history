@@ -1,7 +1,7 @@
 /* Report · time — the listening-over-time charts: months, music vs podcasts,
  * clock, weekday, dial, ratio rings, punchcard, and the daily calendar. */
 (() => {
-  const { el, section, card, esc, WEEKDAYS } = Report._h;
+  const { el, section, card, esc, WEEKDAYS, shareChart } = Report._h;
   const { fmtInt, fmtMs, fmtMsLong, fmtHour } = Stats;
 
   Report._sections.push((body, { a, prev, hasPrev, rangeLabel, currentYear, monthData }) => {
@@ -26,6 +26,7 @@
       tableCols: ['Month', 'Listening'],
       compare: hasPrev ? { labels: [String(currentYear), String(currentYear - 1)] } : null,
     });
+    shareChart(monthsCard, 'My listening over time', `hours per month · ${rangeLabel}`);
 
     if (a.podcastMs > 0) {
       const splitCard = card(grid1, 'Music vs podcasts', 'hours per month by type');

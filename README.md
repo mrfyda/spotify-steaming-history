@@ -28,9 +28,15 @@ is parsed with JavaScript on the page and never leaves your machine.
    - **Account data** — last year of streaming (a few days). Works, with fewer details.
 3. Spotify emails you a zip. Drop it on the page as-is — no need to unpack.
 
-Supported inputs: extended history zips (`Streaming_History_Audio_*.json`,
-`Streaming_History_Video_*.json`, older `endsong_*.json`), account data zips
-(`StreamingHistory*.json`), or those same `.json` files dropped directly.
+Supported inputs: Spotify extended history zips (`Streaming_History_Audio_*.json`,
+`Streaming_History_Video_*.json`, older `endsong_*.json`), Spotify account data zips
+(`StreamingHistory*.json`), Apple Music exports from privacy.apple.com
+(`Apple Music Play Activity.csv`, with `Play History Daily Tracks.csv` as a coarse
+fallback), or those same `.json`/`.csv` files dropped directly.
+
+A linkable demo with sample data lives at [`/demo`](https://mrfyda.github.io/spotify-steaming-history/demo/)
+(it redirects to `?demo`). The Compare tab lets two people diff their histories —
+both files are parsed locally, so the privacy promise holds for the friend too.
 
 ## Deployment
 
@@ -60,7 +66,9 @@ develop without a real export.
 | `assets/charts/*.js` | One chart type per file (columns, streamgraph, radial, grids, constellation), each attaching to `Charts` |
 | `assets/enrich.js` | Opt-in MusicBrainz lookups (genres, album years), batched and cached in localStorage |
 | `assets/report/core.js` | Report shell: year filter, render loop, shared section/table helpers |
-| `assets/report/*.js` | Report sections (overview, library, highlights, discovery, time, insights); each registers onto `Report._sections` and renders in script order |
+| `assets/report/*.js` | Report sections (overview, library, highlights, storyline, discovery, time, insights); each registers onto `Report._sections` and renders in script order |
+| `assets/share.js` | Renders any chart card or top list to a branded PNG for the share sheet |
+| `assets/compare.js` | The Compare tab: parses a friend's export locally, taste match + face-off |
 | `assets/wrapped.js` | The Wrapped slides + canvas share card |
 | `assets/sample.js` | Deterministic synthetic history for the demo button |
 | `assets/main.js` | Drop zone, progress, view switching |

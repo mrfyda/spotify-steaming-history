@@ -1,6 +1,6 @@
 /* Report · insights — the listening fingerprint, habits, and where & how. */
 (() => {
-  const { el, section, card, esc, shareTable, countryName } = Report._h;
+  const { el, section, card, esc, shareTable, countryName, shareChart } = Report._h;
   const { fmtInt, fmtMsLong, fmtPct, fmtHour, top } = Stats;
 
   /* ---- listening fingerprint ---- */
@@ -23,6 +23,7 @@
     fpCard.appendChild(el('div', 'card-sub',
       'Consistency: days with listening · Discovery: first-time tracks · Replay: streams of tracks you play 10+ times · ' +
       'Concentration: time in your top 10 artists · Variety: distinct artists per stream'));
+    shareChart(fpCard, 'My listening fingerprint', currentYear == null ? 'all time' : rangeLabel);
   });
 
   /* ---- habits ---- */

@@ -168,9 +168,17 @@ main { flex: 1; }
 
 /* chart cards */
 .card {
+  position: relative;
   background: var(--surface-1); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 16px;
 }
+.card-share {
+  position: absolute; top: 12px; right: 12px;
+  background: none; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--text-muted); font-size: .74rem; padding: 4px 10px; cursor: pointer;
+}
+.card-share:hover { color: var(--text); border-color: var(--axis); }
+.card-share:disabled { opacity: .5; cursor: default; }
 .card h3 { font-size: 1rem; margin-bottom: 2px; }
 .card .card-sub { color: var(--text-muted); font-size: .84rem; margin-bottom: 12px; }
 .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -220,6 +228,34 @@ figure.chart svg { display: block; width: 100%; height: auto; }
 .enrich-cta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .enrich-cta .empty-note { max-width: 560px; margin: 0; }
 .enrich-cta .chip { margin-bottom: 8px; }
+
+/* artist storyline timeline */
+.tl-head {
+  display: flex; justify-content: space-between;
+  color: var(--text-muted); font-size: .76rem; margin-bottom: 6px;
+  padding-left: 170px; padding-right: 96px;
+}
+.tl-row { display: grid; grid-template-columns: 160px 1fr 86px; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--row-line); }
+.tl-row:last-child { border-bottom: none; }
+.tl-name { font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl-track { position: relative; height: 4px; background: var(--surface-3); border-radius: 2px; }
+.tl-track i { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface-1); transform: translate(-6px, -50%); }
+.tl-date { color: var(--text-muted); font-size: .8rem; text-align: right; }
+@media (max-width: 640px) {
+  .tl-head { padding-left: 96px; }
+  .tl-row { grid-template-columns: 86px 1fr 78px; }
+}
+
+/* compare view */
+.dropzone--mini { padding: 22px; }
+.cmp-hero { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.cmp-score { font-size: 3rem; font-weight: 700; letter-spacing: -.03em; color: var(--accent); }
+.cmp-verdict { font-size: 1.1rem; font-weight: 600; }
+.cmp-hero > div { flex: 1; min-width: 220px; }
+.cmp-hero .card-sub { max-width: 520px; }
+
+/* two-provider how-to */
+.howto h3 { font-size: .92rem; margin: 14px 0 6px; color: var(--text-secondary); }
 
 /* tables / top lists */
 table { width: 100%; border-collapse: collapse; font-size: .93rem; }
@@ -324,6 +360,11 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
   .brand { font-size: .95rem; }
   /* once the views are loaded the tabs are the identity; reclaim the row */
   .topbar:has(.tabs:not([hidden])) .brand { display: none; }
+  /* three tabs + reset must fit a phone row */
+  .tabs { width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 6px 11px; font-size: .85rem; }
+  .tab-reset { font-size: .85rem; margin-left: auto; }
   #report { padding: 16px 14px 60px; }
   .filter-row {
     top: 58px;

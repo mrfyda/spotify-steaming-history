@@ -2,7 +2,7 @@
  * controls, and the sections enrichment unlocks (genres, decades, and the
  * artist constellation). */
 (() => {
-  const { el, section, card, esc, topList, coverageSlice, MONTH_SHORT } = Report._h;
+  const { el, section, card, esc, topList, coverageSlice, MONTH_SHORT, shareChart } = Report._h;
   const { fmtInt, fmtMs, fmtPct, top } = Stats;
 
   Report._sections.push((body, { a, rangeLabel, rangePlays }) => {
@@ -174,6 +174,7 @@
       // the streamgraph needs a few points to flow; fall back to columns below that
       if (seriesLen >= 3) Charts.streamgraph(chartCard, periods, chartSeries, chartOpts);
       else Charts.stackedColumns(chartCard, periods, chartSeries, chartOpts);
+      shareChart(chartCard, 'My genres over time', `hours per ${a.year == null ? 'year' : 'month'} by genre, via MusicBrainz`);
     }
   }
 
@@ -262,5 +263,6 @@
       format: n => fmtMs(n.ms),
       ariaLabel: 'Artist constellation: artists linked by back-to-back plays',
     });
+    shareChart(c, 'My artist constellation', 'top artists, linked when played back to back');
   }
 })();

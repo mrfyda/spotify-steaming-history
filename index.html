@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Listening History: explore your full streaming history</title>
-<meta name="description" content="Drop your Spotify streaming history export and get an exhaustive listening report plus a shareable yearly recap. Everything runs in your browser and no data is uploaded.">
+<meta name="description" content="Drop your Spotify or Apple Music streaming history export and get an exhaustive listening report plus a shareable yearly recap. Everything runs in your browser and no data is uploaded.">
 <meta property="og:title" content="Listening History">
 <meta property="og:description" content="Drop your Spotify data export, get an exhaustive listening report and a shareable yearly recap. 100% in your browser.">
 <meta property="og:type" content="website">
@@ -28,6 +28,7 @@
   <nav class="tabs" id="viewTabs" hidden>
     <button class="tab active" data-view="report">Full report</button>
     <button class="tab" data-view="wrapped">Wrapped</button>
+    <button class="tab" data-view="compare">Compare</button>
     <button class="tab-reset" id="resetBtn" title="Load a different file">↺ New file</button>
   </nav>
 </header>
@@ -35,17 +36,17 @@
 <!-- ============ LANDING / DROP ZONE ============ -->
 <main id="landing">
   <section class="hero">
-    <h1>Your entire Spotify history, not just the top five.</h1>
-    <p class="sub">Drop your Spotify data export below for a deep, last.fm-style report of everything
-    you've ever streamed, plus a Wrapped-style recap you can share.</p>
+    <h1>Your entire streaming history, not just the top five.</h1>
+    <p class="sub">Drop your Spotify or Apple Music export below for a deep, last.fm-style report of
+    everything you've ever streamed, plus a Wrapped-style recap you can share.</p>
 
     <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drop your Spotify export zip here or click to browse">
       <div class="dz-inner">
         <div class="dz-icon">⬇</div>
         <div class="dz-title">Drop your <strong>.zip</strong> here</div>
-        <div class="dz-sub">or click to browse (<code>.json</code> files work too)</div>
+        <div class="dz-sub">or click to browse (<code>.json</code> / <code>.csv</code> files work too)</div>
       </div>
-      <input type="file" id="fileInput" accept=".zip,.json,application/zip,application/json" multiple hidden>
+      <input type="file" id="fileInput" accept=".zip,.json,.csv,application/zip,application/json,text/csv" multiple hidden>
     </div>
 
     <div class="dz-progress" id="progress" hidden>
@@ -64,13 +65,20 @@
 
   <section class="howto">
     <h2>How to get your data</h2>
+    <h3>Spotify</h3>
     <ol>
       <li>Go to <a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener">spotify.com/account/privacy</a></li>
       <li>Request the <strong>Extended streaming history</strong> (your full lifetime history; takes up to
           30 days and is worth the wait) or the basic <strong>Account data</strong> (last year only, arrives in a few days)</li>
       <li>Spotify emails you a download link. Drop the zip here as-is, no need to unpack it</li>
     </ol>
-    <p class="wait-note">The extended history can take a couple of weeks to arrive.
+    <h3>Apple Music</h3>
+    <ol>
+      <li>Go to <a href="https://privacy.apple.com/" target="_blank" rel="noopener">privacy.apple.com</a> and choose <strong>Request a copy of your data</strong></li>
+      <li>Select <strong>Apple Media Services information</strong> (it arrives within a few days)</li>
+      <li>Drop the zip here as-is — the play-activity file inside has your full history</li>
+    </ol>
+    <p class="wait-note">Exports can take a while to arrive.
       <button class="linkish" id="icsBtn">Add a calendar reminder</button> so this page doesn't get lost in the meantime.</p>
   </section>
 </main>
@@ -84,8 +92,11 @@
 <!-- ============ WRAPPED ============ -->
 <main id="wrapped" hidden></main>
 
+<!-- ============ COMPARE ============ -->
+<main id="compare" hidden></main>
+
 <footer class="foot">
-  <span>Runs 100% in your browser · not affiliated with Spotify</span>
+  <span>Runs 100% in your browser · not affiliated with Spotify or Apple</span>
   <a href="https://github.com/mrfyda/spotify-steaming-history" target="_blank" rel="noopener">Source on GitHub</a>
 </footer>
 
@@ -96,18 +107,22 @@
 <script src="assets/stats.js"></script>
 <script src="assets/charts/core.js"></script>
 <script src="assets/charts/columns.js"></script>
+<script src="assets/charts/lines.js"></script>
 <script src="assets/charts/streamgraph.js"></script>
 <script src="assets/charts/radial.js"></script>
 <script src="assets/charts/grids.js"></script>
 <script src="assets/charts/constellation.js"></script>
 <script src="assets/enrich.js"></script>
+<script src="assets/share.js"></script>
 <script src="assets/report/core.js"></script>
 <script src="assets/report/overview.js"></script>
 <script src="assets/report/library.js"></script>
 <script src="assets/report/highlights.js"></script>
+<script src="assets/report/storyline.js"></script>
 <script src="assets/report/discovery.js"></script>
 <script src="assets/report/time.js"></script>
 <script src="assets/report/insights.js"></script>
+<script src="assets/compare.js"></script>
 <script src="assets/wrapped.js"></script>
 <script src="assets/sample.js"></script>
 <script src="assets/main.js"></script>
