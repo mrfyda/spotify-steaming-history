@@ -133,8 +133,6 @@ main { flex: 1; }
   padding: 14px 16px; border-radius: var(--radius); color: var(--text-secondary); font-size: .93rem;
 }
 
-.crash-note { color: var(--text-muted); font-size: .85rem; margin-top: 14px; max-width: 640px; }
-
 .howto { margin-top: 48px; }
 .howto h2 { font-size: 1.1rem; margin-bottom: 10px; }
 .howto ol { padding-left: 22px; color: var(--text-secondary); display: grid; gap: 8px; }

@@ -67,12 +67,7 @@
   try {
     const prev = JSON.parse(localStorage.getItem(PROBE_KEY) || 'null');
     if (prev?.stage && prev.stage !== 'closed cleanly') {
-      const note = document.createElement('p');
-      note.className = 'crash-note';
-      note.textContent = `The previous visit ended without a clean close. Last recorded activity: `
-        + `“${prev.stage}” at ${new Date(prev.t).toLocaleString()} (${prev.b}). `
-        + `If Safari showed a crash message, that's what the page was doing when it died.`;
-      landing.querySelector('.hero')?.appendChild(note);
+      console.info(`Previous visit ended without a clean close — last activity: "${prev.stage}" at ${new Date(prev.t).toLocaleString()} (${prev.b})`);
     }
   } catch { /* first visit / storage off */ }
   probe('loaded, waiting for a file');
