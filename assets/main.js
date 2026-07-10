@@ -44,6 +44,40 @@
   // the moment a live exchange completes, bring the comparison forward
   document.addEventListener('compare:ready', () => { if (allPlays) showView('compare'); });
 
+  /* ---------- build stamp ----------
+   * The deploy workflow seds __BUILD__ to the commit sha, but branch-based
+   * Pages deploys serve the raw file; fall back to the served file's
+   * Last-Modified so the footer always identifies the running version. */
+  const buildInfo = $('buildInfo');
+  const stamped = !buildInfo.dataset.build.includes('BUILD');
+  buildInfo.textContent = stamped
+    ? `build ${buildInfo.dataset.build}`
+    : `deployed ${new Date(document.lastModified).toISOString().slice(0, 16).replace('T', ' ')}Z`;
+
+  /* ---------- crash forensics ----------
+   * We can't attach a debugger to a phone, so the page keeps a breadcrumb of
+   * the last thing it was doing (localStorage, this device only). pagehide
+   * marks a clean end; an OS kill doesn't fire it, so on the next load a
+   * non-clean breadcrumb says WHAT was happening when the tab died —
+   * backgrounded (memory kill) vs mid-parse vs active in the foreground. */
+  const PROBE_KEY = 'lh-last-session';
+  const probe = stage => {
+    try { localStorage.setItem(PROBE_KEY, JSON.stringify({ stage, t: Date.now(), b: buildInfo.textContent })); } catch { /* storage off */ }
+  };
+  try {
+    const prev = JSON.parse(localStorage.getItem(PROBE_KEY) || 'null');
+    if (prev?.stage && prev.stage !== 'closed cleanly') {
+      const note = document.createElement('p');
+      note.className = 'crash-note';
+      note.textContent = `The previous visit ended without a clean close. Last recorded activity: `
+        + `“${prev.stage}” at ${new Date(prev.t).toLocaleString()} (${prev.b}). `
+        + `If Safari showed a crash message, that's what the page was doing when it died.`;
+      landing.querySelector('.hero')?.appendChild(note);
+    }
+  } catch { /* first visit / storage off */ }
+  probe('loaded, waiting for a file');
+  window.addEventListener('pagehide', () => probe('closed cleanly'));
+
   /* ---------- shed weight while backgrounded ----------
    * iOS evicts background tabs by physical footprint, and once data is
    * loaded most of ours is the rendered views: tens of thousands of
@@ -52,7 +86,7 @@
    * app is hidden and rebuild on return, restoring the scroll position. */
   let shedView = null, shedScroll = 0;
   document.addEventListener('visibilitychange', () => {
-    if (!allPlays || tabs.hidden) return; // nothing loaded: nothing heavy
+    if (!allPlays || tabs.hidden) { probe(document.hidden ? 'backgrounded on landing' : 'loaded, waiting for a file'); return; }
     if (document.hidden) {
       const view = ['report', 'wrapped', 'compare'].find(v => !$(v).hidden);
       if (!view) return;
@@ -62,13 +96,20 @@
       wrappedEl.innerHTML = '';
       compareEl.innerHTML = '';
       invalidate();
+      probe(`backgrounded with ${fmtPlays()} loaded, views shed`);
     } else if (shedView) {
       const view = shedView;
       shedView = null;
-      showView(view);
-      window.scrollTo({ top: shedScroll, behavior: 'instant' }); // beat the html{scroll-behavior:smooth}
+      // let the resume settle before the (synchronous) rebuild, in case the
+      // watchdog is stricter right at foregrounding
+      requestAnimationFrame(() => {
+        showView(view);
+        window.scrollTo({ top: shedScroll, behavior: 'instant' }); // beat the html{scroll-behavior:smooth}
+        probe(`viewing ${view} with ${fmtPlays()}`);
+      });
     }
   });
+  const fmtPlays = () => allPlays ? `${allPlays.length.toLocaleString()} plays` : 'no data';
 
   $('resetBtn').addEventListener('click', () => {
     allPlays = null;
@@ -101,6 +142,7 @@
     if (!files || !files.length) return;
     dropError.hidden = true;
     setBusy(true, 'Reading files…');
+    probe('parsing a dropped export');
     try {
       const { plays } = await Parser.parseFiles([...files], t => { progressText.textContent = t; });
       allPlays = plays;
@@ -108,9 +150,11 @@
       Wrapped.reset();
       Compare.reset();
       showView(invitedRoom ? 'compare' : 'report');
+      probe(`viewing report with ${fmtPlays()}`);
     } catch (err) {
       console.error(err);
       showError(err.message || 'Something went wrong reading that file.');
+      probe('parse failed, back on landing');
     } finally {
       setBusy(false);
     }
