@@ -140,13 +140,24 @@ const Compare = (() => {
     };
 
     const showRoom = code => {
+      const link = inviteLink(code);
       liveBox.innerHTML = `
         <div class="cmp-link">
-          <input type="text" readonly value="${esc(inviteLink(code))}" aria-label="Invite link">
+          <input type="text" readonly value="${esc(link)}" aria-label="Invite link">
+          ${navigator.share ? '<button class="chip" id="cmpShare">↗ Share invite</button>' : ''}
           <button class="chip" id="cmpCopy">Copy link</button>
           <button class="chip" id="cmpCancel">Cancel</button>
         </div>
         <div class="cmp-status" role="status"></div>`;
+      // same system share sheet the chart cards use — messengers render the
+      // link with the site's preview card, and the room code rides along
+      liveBox.querySelector('#cmpShare')?.addEventListener('click', () => {
+        navigator.share({
+          title: 'Compare our listening',
+          text: 'Let’s compare our music taste — open this link and load your Spotify or Apple Music export, and we see the comparison live. Nothing gets uploaded by either of us.',
+          url: link,
+        }).catch(() => { /* sheet dismissed */ });
+      });
       liveBox.querySelector('#cmpCopy').addEventListener('click', async e => {
         const input = liveBox.querySelector('input');
         try { await navigator.clipboard.writeText(input.value); } catch { input.select(); document.execCommand('copy'); }
