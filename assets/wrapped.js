@@ -56,11 +56,16 @@ const Wrapped = (() => {
 
     /* --- top artist --- */
     const topArtists = top(a.byArtist, 'ms', 5);
+    const covers = artistCovers(a, topArtists);
     if (topArtists.length) {
       const t1 = topArtists[0];
       const share = a.musicMs ? t1.ms / a.musicMs : 0;
+      const art = url => url
+        ? `<img class="w-art" src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`
+        : '';
       slide('c', `
         <div class="s-lead">Nobody came close to</div>
+        ${covers.get(t1.key) ? `<img class="w-hero-art" src="${esc(covers.get(t1.key))}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
         <div class="s-hero">${esc(t1.key)}</div>
         <p class="s-sub">Your top artist. ${fmtMs(t1.ms)} together, ${fmtInt(t1.plays)} streams,
         and <b>${fmtPct(share)}</b> of all your music time.</p>`);
@@ -69,7 +74,7 @@ const Wrapped = (() => {
         <div class="s-lead">The rest of the podium held its ground.</div>
         <div class="top5">
           ${topArtists.map((e, i) => `
-            <div class="t5"><span class="n">${i + 1}</span><span class="name">${esc(e.key)}</span>
+            <div class="t5"><span class="n">${i + 1}</span>${art(covers.get(e.key))}<span class="name">${esc(e.key)}</span>
             <span class="meta">${fmtMs(e.ms)}</span></div>`).join('')}
         </div>`);
     }
@@ -114,10 +119,20 @@ const Wrapped = (() => {
         <button class="btn secondary" id="copyLink">Copy link</button>
       </div>`);
 
-    const canvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'story');
-    const squareCanvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'square');
+    let canvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'story');
+    let squareCanvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'square');
     const preview = shareSlide.querySelector('#sharePreview');
     preview.src = canvas.toDataURL('image/png');
+
+    // progressively enhance the cards with covers once they load — CAA sends
+    // CORS headers on every hop, so drawing them doesn't taint the canvas
+    loadCovers(covers).then(imgs => {
+      if (!imgs.size || !document.body.contains(shareSlide)) return;
+      canvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'story', imgs);
+      squareCanvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'square', imgs);
+      preview.src = canvas.toDataURL('image/png');
+      refreshShareFile();
+    });
 
     const download = (cv, name) => {
       const link = document.createElement('a');
@@ -141,20 +156,58 @@ const Wrapped = (() => {
     });
 
     const shareBtn = shareSlide.querySelector('#shareCard');
-    if (navigator.share && navigator.canShare) {
+    let shareFile = null;
+    // kept as a ready File so the click handler can call navigator.share
+    // synchronously (Safari invalidates the tap gesture across async work)
+    function refreshShareFile() {
+      if (!navigator.share || !navigator.canShare) return;
       canvas.toBlob(blob => {
+        if (!blob) return;
         const file = new File([blob], `wrapped-${selectedYear}.png`, { type: 'image/png' });
         if (navigator.canShare({ files: [file] })) {
+          shareFile = file;
           shareBtn.hidden = false;
-          shareBtn.addEventListener('click', () =>
-            navigator.share({
-              files: [file],
-              title: `My ${selectedYear} in music`,
-              text: `My ${selectedYear} in music. Make yours at ${location.origin + location.pathname}`,
-            }).catch(() => {}));
         }
       });
     }
+    refreshShareFile();
+    shareBtn.addEventListener('click', () => shareFile && navigator.share({
+      files: [shareFile],
+      title: `My ${selectedYear} in music`,
+      text: `My ${selectedYear} in music. Make yours at ${location.origin + location.pathname}`,
+    }).catch(() => {}));
+  }
+
+  /* covers for the top artists: their own artwork if the old cache has it,
+   * else the cover of their most-played album (via the opt-in enrichment) */
+  function artistCovers(a, artists) {
+    const covers = new Map();
+    const wanted = new Set(artists.map(e => e.key));
+    for (const e of artists) {
+      const own = Enrich.get(e.key)?.a;
+      if (own) covers.set(e.key, own);
+    }
+    for (const e of top(a.byAlbum, 'ms')) {
+      if (covers.size >= wanted.size) break;
+      if (!wanted.has(e.artist) || covers.has(e.artist)) continue;
+      const url = Enrich.albumArtUrl(e.artist, e.album);
+      if (url) covers.set(e.artist, url);
+    }
+    return covers;
+  }
+
+  /* preload covers with CORS so they can be drawn onto the share canvas
+   * without tainting it. Resolves with whatever loaded; failures just drop. */
+  function loadCovers(urls) {
+    const jobs = [...urls.entries()].map(([artist, url]) => new Promise(res => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      setTimeout(() => res(null), 8000);
+      img.onload = () => res([artist, img]);
+      img.onerror = () => res(null);
+      img.src = url;
+    }));
+    return Promise.all(jobs).then(rs => new Map(rs.filter(Boolean)));
   }
 
   function personality(a) {
@@ -208,9 +261,20 @@ const Wrapped = (() => {
     return (location.host + location.pathname).replace(/\/$/, '');
   }
 
-  /* ---- share cards: 1080×1920 story, 1080×1080 square ---- */
-  function drawShareCard(a, topArtists, topTracks, p, format = 'story') {
-    if (format === 'square') return drawSquareCard(a, topArtists, topTracks, p);
+  /* draw a cover as a rounded square */
+  function drawCover(ctx, img, x, y, size, radius) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, radius);
+    ctx.clip();
+    ctx.drawImage(img, x, y, size, size);
+    ctx.restore();
+  }
+
+  /* ---- share cards: 1080×1920 story, 1080×1080 square ----
+   * covers: Map artist -> preloaded CORS-safe Image (optional) */
+  function drawShareCard(a, topArtists, topTracks, p, format = 'story', covers = null) {
+    if (format === 'square') return drawSquareCard(a, topArtists, topTracks, p, covers);
     const W = 1080, H = 1920;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
@@ -248,9 +312,10 @@ const Wrapped = (() => {
     ctx.font = `500 38px ${sans}`;
     ctx.fillText(`${fmtInt(a.streams)} streams · ${fmtInt(a.uniqueArtists)} artists · ${fmtInt(a.activeDays)} days`, W / 2, 548);
 
-    // two columns of top-5s
+    // two columns of top-5s; artist rows carry covers when they loaded
     const colY = 680, lineH = 78;
-    const drawList = (title, items, x, colW) => {
+    const drawList = (title, items, x, colW, arts) => {
+      const hasArt = !!arts?.some(Boolean);
       ctx.textAlign = 'left';
       ctx.fillStyle = MUTED;
       ctx.font = `600 32px ${sans}`;
@@ -260,12 +325,14 @@ const Wrapped = (() => {
         ctx.fillStyle = i === 0 ? ACCENT : '#b0aea6';
         ctx.font = `800 40px ${sans}`;
         ctx.fillText(String(i + 1), x, y);
+        if (hasArt && arts[i]) drawCover(ctx, arts[i], x + 48, y - 44, 58, 10);
+        const nameX = x + 48 + (hasArt ? 74 : 0);
         ctx.fillStyle = i === 0 ? INK : SECONDARY;
         ctx.font = `${i === 0 ? 800 : 600} 40px ${sans}`;
-        ctx.fillText(ellipsize(label, colW - 60), x + 48, y);
+        ctx.fillText(ellipsize(label, colW - 60 - (hasArt ? 74 : 0)), nameX, y);
       });
     };
-    drawList('Top artists', topArtists.map(e => e.key), 90, 450);
+    drawList('Top artists', topArtists.map(e => e.key), 90, 450, covers && topArtists.map(e => covers.get(e.key)));
     drawList('Top songs', topTracks.map(e => e.track), 560, 450);
 
     // personality
@@ -299,7 +366,7 @@ const Wrapped = (() => {
     return canvas;
   }
 
-  function drawSquareCard(a, topArtists, topTracks, p) {
+  function drawSquareCard(a, topArtists, topTracks, p, covers = null) {
     const W = 1080, H = 1080;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
@@ -334,7 +401,8 @@ const Wrapped = (() => {
     ctx.fillText(`${fmtInt(a.streams)} streams · ${fmtInt(a.uniqueArtists)} artists · ${fmtInt(a.activeDays)} days`, W / 2, 428);
 
     const colY = 540, lineH = 60;
-    const drawList = (title, items, x, colW) => {
+    const drawList = (title, items, x, colW, arts) => {
+      const hasArt = !!arts?.some(Boolean);
       ctx.textAlign = 'left';
       ctx.fillStyle = MUTED;
       ctx.font = `600 28px ${sans}`;
@@ -344,12 +412,14 @@ const Wrapped = (() => {
         ctx.fillStyle = i === 0 ? ACCENT : '#b0aea6';
         ctx.font = `800 34px ${sans}`;
         ctx.fillText(String(i + 1), x, y);
+        if (hasArt && arts[i]) drawCover(ctx, arts[i], x + 42, y - 34, 44, 8);
+        const nameX = x + 42 + (hasArt ? 58 : 0);
         ctx.fillStyle = i === 0 ? INK : SECONDARY;
         ctx.font = `${i === 0 ? 800 : 600} 34px ${sans}`;
-        ctx.fillText(ellipsize(label, colW - 50), x + 42, y);
+        ctx.fillText(ellipsize(label, colW - 50 - (hasArt ? 58 : 0)), nameX, y);
       });
     };
-    drawList('Top artists', topArtists.map(e => e.key), 90, 450);
+    drawList('Top artists', topArtists.map(e => e.key), 90, 450, covers && topArtists.map(e => covers.get(e.key)));
     drawList('Top songs', topTracks.map(e => e.track), 560, 450);
 
     ctx.textAlign = 'center';

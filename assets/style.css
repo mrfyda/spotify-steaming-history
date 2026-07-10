@@ -335,6 +335,8 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
 
 .top5 { text-align: left; margin: 24px auto 0; max-width: 440px; display: grid; gap: 10px; }
 .top5 .t5 { display: flex; align-items: baseline; gap: 14px; }
+.top5 .t5 .w-art { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; flex: none; align-self: center; background: var(--surface-3); }
+.w-hero-art { width: clamp(120px, 26vw, 190px); aspect-ratio: 1; border-radius: 14px; object-fit: cover; display: block; margin: 8px auto 16px; box-shadow: 0 10px 32px rgba(0, 0, 0, .22); background: var(--surface-3); }
 .top5 .t5 .n { font-size: 1.2rem; font-weight: 700; color: var(--text-muted); width: 28px; flex: none; font-variant-numeric: tabular-nums; }
 .top5 .t5 .name { font-size: clamp(1.05rem, 3vw, 1.4rem); font-weight: 650; letter-spacing: -.01em; overflow-wrap: anywhere; }
 .top5 .t5 .meta { color: var(--text-muted); font-size: .9rem; flex: none; margin-left: auto; padding-left: 10px; }
