@@ -80,9 +80,9 @@ const Stats = (() => {
     const eras = new Map(); // period (year, or month in year view) -> Map(artist -> ms)
 
     // per-artist sparkline buckets: years for all-time, months for a year view
-    const startYear = new Date(plays[0].ts).getFullYear();
+    const startYear = new Date(plays.firstTs).getFullYear();
     const seriesLen = year == null
-      ? new Date(plays[plays.length - 1].ts).getFullYear() - startYear + 1
+      ? new Date(plays.lastTs).getFullYear() - startYear + 1
       : 12;
 
     // session accumulator

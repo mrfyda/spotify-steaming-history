@@ -28,7 +28,7 @@
     if (currentYear != null) return;
     const spans = artistSpans(allPlays);
     if (spans.size < 8) return;
-    const minTs = allPlays[0].ts, maxTs = allPlays[allPlays.length - 1].ts;
+    const minTs = allPlays.firstTs, maxTs = allPlays.lastTs;
     if (maxTs - minTs < YEAR) return; // too short for a storyline
 
     const ranked = [...spans.entries()]

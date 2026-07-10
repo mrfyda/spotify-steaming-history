@@ -104,7 +104,7 @@ const Sample = (() => {
         }
       }
     }
-    return Parser.normalizeArray(plays).sort((x, y) => x.ts - y.ts);
+    return PlayStore.fromRecords(Parser.normalizeArray(plays)); // sorts by ts internally
   }
 
   return { generate };

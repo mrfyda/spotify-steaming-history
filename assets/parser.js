@@ -18,6 +18,12 @@
  *    platform, country, reasonStart, reasonEnd,
  *    shuffle, skipped, offline, incognito }
  * skipped is true/false when the export provides it, otherwise null.
+ *
+ * parseFiles returns the records as a PlayStore (columnar, ~35 B/play), not
+ * an object array — a decade of history would otherwise hold hundreds of MB
+ * of heap, which gets the tab evicted on mobile. Records exist as objects
+ * only one file at a time, on their way into the store; uri and episode are
+ * used for dedupe here but not retained (nothing downstream reads them).
  */
 const Parser = (() => {
 
@@ -237,9 +243,10 @@ const Parser = (() => {
     return normalizeArray(data);
   }
 
-  /** files: FileList/array of File. onProgress(text). Returns {plays, filesRead}. */
+  /** files: FileList/array of File. onProgress(text).
+   *  Returns {plays: PlayStore, filesRead}. */
   async function parseFiles(files, onProgress) {
-    const plays = [];
+    const builder = PlayStore.builder();
     const seen = new Set();
     let filesRead = 0;
 
@@ -249,7 +256,7 @@ const Parser = (() => {
         const key = p.ts + '|' + p.ms + '|' + (p.uri || p.track || p.episode || '');
         if (seen.has(key)) continue;
         seen.add(key);
-        plays.push(p);
+        builder.add(p);
       }
     };
 
@@ -298,15 +305,14 @@ const Parser = (() => {
     await readSources(activitySources, t => parseAppleCsv(t, 'activity'));
     // Daily Tracks describes the same listening as Play Activity, only coarser —
     // read it only when it's all we have
-    if (!plays.length) await readSources(dailySources, t => parseAppleCsv(t, 'daily'));
+    if (!builder.count) await readSources(dailySources, t => parseAppleCsv(t, 'daily'));
 
     if (!filesRead) throw new Error('Please drop a Spotify or Apple Music export .zip (or its .json/.csv files).');
-    if (!plays.length) throw new Error('The files were read but contained no plays.');
+    if (!builder.count) throw new Error('The files were read but contained no plays.');
 
-    plays.sort((a, b) => a.ts - b.ts);
-    onProgress?.(`Crunching ${plays.length.toLocaleString()} plays…`);
+    onProgress?.(`Crunching ${builder.count.toLocaleString()} plays…`);
     await new Promise(r => setTimeout(r));
-    return { plays, filesRead };
+    return { plays: builder.finish(), filesRead };
   }
 
   return { parseFiles, normalizeArray };

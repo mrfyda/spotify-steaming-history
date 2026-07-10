@@ -64,7 +64,8 @@ develop without a real export.
 
 | File | Purpose |
 |---|---|
-| `assets/parser.js` | Reads zips/JSON (JSZip), normalizes all export formats into one record shape |
+| `assets/store.js` | Columnar play storage (typed arrays + string tables, ~35 B/play) behind a plain-object read API — keeps big histories from getting the tab evicted on mobile |
+| `assets/parser.js` | Reads zips/JSON (JSZip), normalizes all export formats, streams records into the store |
 | `assets/stats.js` | Aggregation engine — everything both views need, computed per time range |
 | `assets/charts/core.js` | Chart plumbing: light/dark theme tokens, tooltip singleton, SVG + table-twin builders |
 | `assets/charts/*.js` | One chart type per file (columns, streamgraph, radial, grids, constellation), each attaching to `Charts` |
