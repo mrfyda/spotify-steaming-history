@@ -22,6 +22,13 @@ const Compare = (() => {
     live = null;
   }
 
+  // when the app is backgrounded, a friend aggregate that came from a full
+  // export still carries byTrack/byAlbum maps the comparison never reads —
+  // slim it to its summary equivalent (what renders is identical)
+  document.addEventListener('lh:shed', () => {
+    if (friendAgg) friendAgg = CmpSummary.toAggregate(CmpSummary.build(friendAgg));
+  });
+
   function reset() { friendAgg = null; stopLive(); }
 
   function el(tag, cls, html) {

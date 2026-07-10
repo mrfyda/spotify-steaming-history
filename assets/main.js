@@ -96,6 +96,7 @@
       wrappedEl.innerHTML = '';
       compareEl.innerHTML = '';
       invalidate();
+      document.dispatchEvent(new Event('lh:shed')); // modules drop their caches too
       probe(`backgrounded with ${fmtPlays()} loaded, views shed`);
     } else if (shedView) {
       const view = shedView;

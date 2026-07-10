@@ -20,7 +20,10 @@ const Stats = (() => {
 
   /** First-ever stream timestamps per track/artist across the FULL dataset,
    *  cached per plays array so year-filter switches don't recompute. */
-  const firstsCache = new WeakMap();
+  let firstsCache = new WeakMap();
+  // main.js broadcasts lh:shed when the app is backgrounded — these maps hold
+  // a string per unique track, real MBs at scale, and rebuild in one pass
+  document.addEventListener?.('lh:shed', () => { firstsCache = new WeakMap(); });
   function globalFirsts(plays) {
     let f = firstsCache.get(plays);
     if (f) return f;

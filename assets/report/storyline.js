@@ -9,7 +9,8 @@
   const YEAR = 365 * 86_400_000;
 
   /* one full-history pass per dataset: artist -> {first, last, ms, plays} */
-  const cache = new WeakMap();
+  let cache = new WeakMap();
+  document.addEventListener('lh:shed', () => { cache = new WeakMap(); }); // rebuilt on next render
   function artistSpans(allPlays) {
     let m = cache.get(allPlays);
     if (m) return m;
