@@ -77,7 +77,7 @@ develop without a real export.
 | `assets/compare.js` | The Compare tab: live WebRTC rooms, summary files, or a locally parsed export — taste match + face-off |
 | `assets/wrapped.js` | The Wrapped slides + canvas share card |
 | `assets/sample.js` | Deterministic synthetic history for the demo button |
-| `assets/main.js` | Drop zone, progress, view switching, live-compare invite routing |
+| `assets/main.js` | Drop zone, progress, view switching, invite routing; sheds rendered views while backgrounded |
 | `vendor/trystero-nostr.min.js` | Trystero (MIT), bundled from npm with esbuild — WebRTC rooms with nostr-relay signaling |
 
 A "stream" is counted when a play lasts ≥ 30 seconds (Spotify's own convention);

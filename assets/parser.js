@@ -243,6 +243,21 @@ const Parser = (() => {
     return normalizeArray(data);
   }
 
+  /* 53-bit hash of the dedupe key. Holding the key STRINGS for a whole
+   * export keeps tens of MB alive through the entire parse — the memory
+   * peak that matters on mobile — while a Set of numbers is a fraction of
+   * that. Collision odds across a million plays are ~1e-7, and a collision
+   * merely drops one play. */
+  function keyHash(s) {
+    let h1 = 0x811c9dc5, h2 = 0xcbf29ce4;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+      h2 = Math.imul(h2 ^ c, 2246822519) >>> 0;
+    }
+    return h1 * 0x200000 + (h2 >>> 11); // 32 + 21 bits
+  }
+
   /** files: FileList/array of File. onProgress(text).
    *  Returns {plays: PlayStore, filesRead}. */
   async function parseFiles(files, onProgress) {
@@ -253,7 +268,7 @@ const Parser = (() => {
     const addAll = (recs) => {
       for (const p of recs) {
         // dedupe (same file dropped twice / audio+video overlap)
-        const key = p.ts + '|' + p.ms + '|' + (p.uri || p.track || p.episode || '');
+        const key = keyHash(p.ts + '|' + p.ms + '|' + (p.uri || p.track || p.episode || ''));
         if (seen.has(key)) continue;
         seen.add(key);
         builder.add(p);

@@ -44,6 +44,32 @@
   // the moment a live exchange completes, bring the comparison forward
   document.addEventListener('compare:ready', () => { if (allPlays) showView('compare'); });
 
+  /* ---------- shed weight while backgrounded ----------
+   * iOS evicts background tabs by physical footprint, and once data is
+   * loaded most of ours is the rendered views: tens of thousands of
+   * DOM/SVG nodes whose listeners also pin the aggregates. All of it is
+   * re-derivable from the (small) play store, so drop it the moment the
+   * app is hidden and rebuild on return, restoring the scroll position. */
+  let shedView = null, shedScroll = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (!allPlays || tabs.hidden) return; // nothing loaded: nothing heavy
+    if (document.hidden) {
+      const view = ['report', 'wrapped', 'compare'].find(v => !$(v).hidden);
+      if (!view) return;
+      shedView = view;
+      shedScroll = window.scrollY;
+      $('reportBody').innerHTML = '';
+      wrappedEl.innerHTML = '';
+      compareEl.innerHTML = '';
+      invalidate();
+    } else if (shedView) {
+      const view = shedView;
+      shedView = null;
+      showView(view);
+      window.scrollTo({ top: shedScroll, behavior: 'instant' }); // beat the html{scroll-behavior:smooth}
+    }
+  });
+
   $('resetBtn').addEventListener('click', () => {
     allPlays = null;
     invalidate();

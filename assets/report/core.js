@@ -29,6 +29,7 @@ const Report = (() => {
     // re-render on start (instant feedback), after the quick burst (artwork
     // appears within seconds), then periodically and at the end
     Enrich.setOnUpdate(s => {
+      if (document.hidden) return; // shed while backgrounded; re-rendered on return
       if (document.getElementById('report').hidden) return;
       const milestone = !s.running || s.done === s.total || s.done === 0 || s.done === 12 || s.done % 120 === 0;
       if (milestone) {
