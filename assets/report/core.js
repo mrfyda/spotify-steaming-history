@@ -173,7 +173,8 @@ const Report = (() => {
         if (!anyArt) return '';
         const src = art(e);
         return src
-          ? `<img class="t-art" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+          ? `<img class="t-art" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer"
+               onerror="this.className='t-art t-art--ph';this.removeAttribute('src')">`
           : '<div class="t-art t-art--ph"></div>';
       };
       const rows = filtered.slice(0, shown).map(e => `

@@ -69,7 +69,7 @@ develop without a real export.
 | `assets/stats.js` | Aggregation engine — everything both views need, computed per time range |
 | `assets/charts/core.js` | Chart plumbing: light/dark theme tokens, tooltip singleton, SVG + table-twin builders |
 | `assets/charts/*.js` | One chart type per file (columns, streamgraph, radial, grids, constellation), each attaching to `Charts` |
-| `assets/enrich.js` | Opt-in MusicBrainz lookups (genres, album years), batched and cached in localStorage |
+| `assets/enrich.js` | Opt-in MusicBrainz lookups (genres, album years, cover MBIDs → Cover Art Archive images), batched and cached in localStorage |
 | `assets/report/core.js` | Report shell: year filter, render loop, shared section/table helpers |
 | `assets/report/*.js` | Report sections (overview, library, highlights, storyline, discovery, time, insights); each registers onto `Report._sections` and renders in script order |
 | `assets/share.js` | Renders any chart card or top list to a branded PNG for the share sheet |

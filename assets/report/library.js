@@ -10,10 +10,17 @@
     const albumEntries = top(a.byAlbum, 'ms');
     const enrich = buildEnrichQueue(artistEntries, albumEntries);
 
+    // an artist with no artwork of their own borrows their top album's cover
+    const artistArt = new Map();
+    for (const e of albumEntries) {
+      if (artistArt.has(e.artist)) continue;
+      const url = Enrich.albumArtUrl(e.artist, e.album);
+      if (url) artistArt.set(e.artist, url);
+    }
     topList(body, 'Top artists', artistEntries, {
       name: e => e.key,
       sub: e => [Enrich.get(e.key)?.g, `${fmtInt(e.tracks || 0)} tracks`].filter(Boolean).join(' · '),
-      art: e => Enrich.get(e.key)?.a,
+      art: e => Enrich.get(e.key)?.a || artistArt.get(e.key),
       spark: e => e.series,
       sparkTitle: a.year == null ? 'Trend by year' : 'Trend by month',
       rangeLabel,
@@ -27,6 +34,7 @@
     topList(body, 'Top albums', albumEntries, {
       name: e => e.album,
       sub: e => [Enrich.getAlbum(e.artist, e.album)?.y, e.artist].filter(Boolean).join(' · '),
+      art: e => Enrich.albumArtUrl(e.artist, e.album),
       rangeLabel,
     });
     if (a.byShow.size) {
@@ -88,8 +96,9 @@
       bar.innerHTML = `<button class="chip enrich-start">Improve coverage</button>
         <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up ${fmtInt(artistCount)} more artists
         and ${fmtInt(albumCount)} more albums on MusicBrainz, most-played first in batched requests
-        (about ${mins} min; runs in the background). Only artist and album names are sent; nothing
-        about your listening leaves the browser. Stop or resume anytime.</span>`;
+        (about ${mins} min; runs in the background), and pulls album covers from the Cover Art Archive.
+        Only artist and album names are sent; nothing about your listening leaves the browser.
+        Stop or resume anytime.</span>`;
       bar.querySelector('.enrich-start').addEventListener('click', () => Enrich.run(queue));
     }
   }
@@ -111,7 +120,7 @@
     } else {
       const wrap = el('div', 'enrich-cta');
       wrap.appendChild(el('p', 'empty-note', esc(blurb)));
-      const btn = el('button', 'chip', 'Add genres &amp; decades');
+      const btn = el('button', 'chip', 'Add genres, decades &amp; covers');
       btn.addEventListener('click', () => Enrich.run(queue));
       wrap.appendChild(btn);
       c.appendChild(wrap);

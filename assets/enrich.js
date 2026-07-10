@@ -14,8 +14,11 @@
  * Failed requests retry with backoff; items that still fail stay uncached
  * and are retried on the next run — failures are never cached as misses.
  *
- * (The artist cache key is shared with the earlier iTunes-based version, so
- * artwork fetched back then keeps displaying; MusicBrainz adds no artwork.)
+ * Album matches also keep their release-group MBID: the Cover Art Archive
+ * serves cover images straight off that id (no extra lookups — the browser
+ * fetches covers lazily as rows scroll into view, only after the user opted
+ * in to enrichment). The artist cache key is shared with the earlier
+ * iTunes-based version, so artwork fetched back then keeps displaying.
  */
 const Enrich = (() => {
 
@@ -92,8 +95,11 @@ const Enrich = (() => {
     (rg['artist-credit'] || []).some(c => norm(c.name) === norm(artist));
 
   function rgYear(rg) {
+    const meta = {};
     const year = Number(String(rg['first-release-date']).slice(0, 4));
-    return isFinite(year) && year > 1900 ? { y: year } : {};
+    if (isFinite(year) && year > 1900) meta.y = year;
+    if (rg.id) meta.i = rg.id; // release-group MBID — keys Cover Art Archive images
+    return meta;
   }
 
   /** Individual album lookup (fallback path). {} = definite no-match. */
@@ -125,8 +131,17 @@ const Enrich = (() => {
   const albumKey = (artist, album) => artist + '\u0000' + album;
   const get = name => artists[name];
   const getAlbum = (artist, album) => albums[albumKey(artist, album)];
+  const albumArtUrl = (artist, album) => {
+    const i = albums[albumKey(artist, album)]?.i;
+    return i ? `https://coverartarchive.org/release-group/${i}/front-250` : null;
+  };
   const pendingArtists = names => names.filter(n => !(n in artists));
-  const pendingAlbums = pairs => pairs.filter(([ar, al]) => !(albumKey(ar, al) in albums));
+  // an album cached with a year but no MBID predates cover support — offer it
+  // for re-lookup; {} entries stay settled (looked up, no match)
+  const pendingAlbums = pairs => pairs.filter(([ar, al]) => {
+    const m = albums[albumKey(ar, al)];
+    return !m || (m.y != null && m.i == null);
+  });
 
   /** Rough request count → minutes, for the button's ETA. */
   function estimateMinutes(artistCount, albumCount) {
@@ -234,5 +249,5 @@ const Enrich = (() => {
   const stop = () => { state.stopRequested = true; };
   const setOnUpdate = cb => { onUpdate = cb; };
 
-  return { get, getAlbum, pendingArtists, pendingAlbums, estimateMinutes, run, stop, state, setOnUpdate };
+  return { get, getAlbum, albumArtUrl, pendingArtists, pendingAlbums, estimateMinutes, run, stop, state, setOnUpdate };
 })();
