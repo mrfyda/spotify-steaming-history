@@ -71,23 +71,27 @@ const Wrapped = (() => {
         <p class="s-sub">Your top artist. ${fmtMs(t1.ms)} together, ${fmtInt(t1.plays)} streams,
         and <b>${fmtPct(share)}</b> of all your music time.</p>`);
 
-      slide('d', `
-        <div class="s-lead">The rest of the podium held its ground.</div>
-        <div class="top5">
-          ${topArtists.map((e, i) => `
-            <div class="t5"><span class="n">${i + 1}</span>${art(covers.get(e.key))}<span class="name">${esc(e.key)}</span>
-            <span class="meta">${fmtMs(e.ms)}</span></div>`).join('')}
-        </div>`);
-    }
-
-    /* --- artist sprint: the monthly race for #1 (Wrapped 2025's Top Artist
-     * Sprint) — each line is an artist's rank among your top 5, per month --- */
-    const sprint = sprintSvg(topArtists);
-    if (sprint) {
-      slide('b', `
-        <div class="s-lead">The race for #1, month by month.</div>
-        ${sprint}
-        <p class="s-sub">Each line is one of your top five artists, ranked by that month's listening.</p>`);
+      /* the race for #1 as horizontal bars, each against the leader */
+      if (topArtists.length >= 2) {
+        const gap = 1 - topArtists[1].ms / t1.ms;
+        const lead = gap < 0.1 ? 'A photo finish for #1.'
+          : gap < 0.3 ? 'The race for #1 stayed close.'
+          : 'The race for #1 wasn’t close.';
+        slide('d', `
+          <div class="s-lead">${lead}</div>
+          <div class="race">
+            ${topArtists.map((e, i) => `
+              <div class="race-row">${art(covers.get(e.key))}
+                <div class="race-main">
+                  <span class="race-name">${i + 1}. ${esc(e.key)}</span>
+                  <div class="race-line">
+                    <div class="race-track"><div class="race-bar${i ? '' : ' race-bar--lead'}" style="width:${Math.max(2, Math.round((e.ms / t1.ms) * 100))}%"></div></div>
+                    <span class="race-time">${fmtMs(e.ms)}</span>
+                  </div>
+                </div>
+              </div>`).join('')}
+          </div>`);
+      }
     }
 
     /* --- quiz before the reveal (Wrapped 2025's Top Song Quiz) --- */
@@ -253,59 +257,6 @@ const Wrapped = (() => {
       title: `My ${selectedYear} in music`,
       text: `My ${selectedYear} in music. Make yours at ${location.origin + location.pathname}`,
     }).catch(() => {}));
-  }
-
-  /* bump chart of the top five artists' monthly ranks — a line per artist,
-   * a point only for months they were actually played. Needs a few active
-   * months and at least 3 artists to be a race at all. */
-  function sprintSvg(topArtists) {
-    const runners = topArtists.filter(e => e.series);
-    if (runners.length < 3) return null;
-    const months = runners[0].series.length;
-    const activeMonths = [...Array(months).keys()].filter(m => runners.some(e => (e.series[m] || 0) > 0));
-    if (activeMonths.length < 4) return null;
-
-    const lastActive = Math.max(...activeMonths); // an in-progress year ends where the data does
-    const W = 620, TOP = 16, LX = 44, RX = W - 20, ROW = 30;
-    const H = TOP + runners.length * ROW + 34;
-    const x = m => LX + (m / Math.max(1, lastActive)) * (RX - LX);
-    const y = rank => TOP + rank * ROW + ROW / 2;
-    const COLORS = Charts.theme().cat;
-
-    // rank per artist per month (null when not played that month)
-    const pos = runners.map(() => new Array(months).fill(null));
-    for (let m = 0; m < months; m++) {
-      [...runners.keys()]
-        .sort((i, j) => (runners[j].series[m] || 0) - (runners[i].series[m] || 0))
-        .forEach((idx, rank) => { if ((runners[idx].series[m] || 0) > 0) pos[idx][m] = rank; });
-    }
-
-    const lines = runners.map((e, i) => {
-      const pts = [];
-      let seg = [];
-      for (let m = 0; m < months; m++) {
-        if (pos[i][m] == null) { if (seg.length > 1) pts.push(seg); seg = []; continue; }
-        seg.push(`${x(m).toFixed(1)},${y(pos[i][m]).toFixed(1)}`);
-      }
-      if (seg.length > 1) pts.push(seg);
-      const dots = pos[i].map((r, m) => r == null ? '' :
-        `<circle cx="${x(m).toFixed(1)}" cy="${y(r).toFixed(1)}" r="3.5" fill="${COLORS[i]}"/>`).join('');
-      return pts.map(seg =>
-        `<polyline points="${seg.join(' ')}" fill="none" stroke="${COLORS[i]}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" opacity=".85"/>`
-      ).join('') + dots;
-    }).join('');
-
-    const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-    const labels = [...Array(lastActive + 1).keys()].map(m =>
-      `<text x="${x(m).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="${Charts.theme().muted}">${MONTHS[m] || m + 1}</text>`).join('');
-    const rankLabels = runners.map((_, r) =>
-      `<text x="${LX - 14}" y="${y(r) + 4}" text-anchor="middle" font-size="11" fill="${Charts.theme().muted}">#${r + 1}</text>`).join('');
-    const legend = runners.map((e, i) =>
-      `<span><i style="background:${COLORS[i]}"></i>${esc(e.key)}</span>`).join('');
-
-    return `<div class="sprint"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Monthly rank of your top artists">
-      ${rankLabels}${lines}${labels}</svg>
-      <div class="chart-legend" style="justify-content:center">${legend}</div></div>`;
   }
 
   /* weighted-median release year of the year's album listening —

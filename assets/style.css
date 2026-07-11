@@ -335,7 +335,7 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
 
 .top5 { text-align: left; margin: 24px auto 0; max-width: 440px; display: grid; gap: 10px; }
 .top5 .t5 { display: flex; align-items: baseline; gap: 14px; }
-.top5 .t5 .w-art { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; flex: none; align-self: center; background: var(--surface-3); }
+.w-art { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; flex: none; align-self: center; background: var(--surface-3); }
 .w-hero-art { width: clamp(120px, 26vw, 190px); aspect-ratio: 1; border-radius: 14px; object-fit: cover; display: block; margin: 8px auto 16px; box-shadow: 0 10px 32px rgba(0, 0, 0, .22); background: var(--surface-3); }
 .top5 .t5 .n { font-size: 1.2rem; font-weight: 700; color: var(--text-muted); width: 28px; flex: none; font-variant-numeric: tabular-nums; }
 .top5 .t5 .name { font-size: clamp(1.05rem, 3vw, 1.4rem); font-weight: 650; letter-spacing: -.01em; overflow-wrap: anywhere; }
@@ -357,9 +357,20 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
 .quiz-opt--yes { border-color: var(--accent); background: var(--dz-hover); opacity: 1 !important; }
 .quiz-opt--no { border-color: var(--err-border); background: var(--err-bg); }
 
-/* wrapped: artist sprint bump chart */
-.sprint { max-width: 620px; margin: 22px auto 0; }
-.sprint svg { width: 100%; height: auto; display: block; }
+/* wrapped: the race for #1 as horizontal bars */
+.race { display: grid; gap: 14px; max-width: 460px; margin: 26px auto 0; text-align: left; }
+.race-row { display: flex; align-items: center; gap: 12px; }
+.race-main { flex: 1; min-width: 0; }
+.race-name {
+  display: block; font-weight: 650; font-size: .95rem; margin-bottom: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.race-row:first-child .race-name { color: var(--accent-ink); }
+.race-line { display: flex; align-items: center; gap: 10px; }
+.race-track { flex: 1; height: 16px; background: var(--surface-3); border-radius: 6px; overflow: hidden; }
+.race-bar { height: 100%; border-radius: 6px; background: var(--axis); }
+.race-bar--lead { background: var(--accent); }
+.race-time { flex: none; color: var(--text-muted); font-size: .82rem; font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
 
 .year-pick { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 24px; }
 .year-pick .chip { font-size: .98rem; padding: 8px 20px; }
