@@ -28,6 +28,7 @@
     topList(body, 'Top tracks', top(a.byTrack, 'plays'), {
       name: e => e.track,
       sub: e => e.artist,
+      art: e => Enrich.albumArtUrl(e.artist, e.album),
       sortBy: 'plays',
       rangeLabel,
     });

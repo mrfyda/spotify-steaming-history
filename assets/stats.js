@@ -157,6 +157,7 @@ const Stats = (() => {
         const trackKey = p.artist + '\u0000' + p.track;
         const tE = bump(a.byTrack, trackKey, p.ms, counted);
         tE.track = p.track; tE.artist = p.artist;
+        if (p.album) tE.album = p.album; // links the track to its album's cover
         if (!tE.firstTs) tE.firstTs = p.ts;
         tE.lastTs = p.ts;
         if (p.skipped) tE.skips = (tE.skips || 0) + 1;

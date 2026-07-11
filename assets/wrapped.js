@@ -96,6 +96,12 @@ const Wrapped = (() => {
 
     /* --- quiz before the reveal (Wrapped 2025's Top Song Quiz) --- */
     const topTracks = top(a.byTrack, 'plays', 5);
+    // songs borrow their album's cover (each track aggregate knows its album)
+    const trackCovers = new Map();
+    for (const e of topTracks) {
+      const url = Enrich.albumArtUrl(e.artist, e.album);
+      if (url) trackCovers.set(e.key, url);
+    }
     const quizPool = top(a.byTrack, 'plays', 8);
     if (quizPool.length >= 4) {
       const decoys = quizPool.slice(1).sort(() => Math.random() - 0.5).slice(0, 3);
@@ -128,11 +134,12 @@ const Wrapped = (() => {
       const t1 = topTracks[0];
       slide('e', `
         <div class="s-lead">One song refused to leave the queue.</div>
+        ${trackCovers.get(t1.key) ? `<img class="w-hero-art" src="${esc(trackCovers.get(t1.key))}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
         <div class="s-hero" style="font-size:clamp(1.8rem,6vw,3.6rem)">“${esc(t1.track)}”</div>
         <p class="s-sub">${esc(t1.artist)}. You played it <b>${fmtInt(t1.plays)} times</b>, ${fmtMs(t1.ms)} in total.</p>
         <div class="top5" style="margin-top:34px">
           ${topTracks.slice(1).map((e, i) => `
-            <div class="t5"><span class="n">${i + 2}</span><span class="name">${esc(e.track)}</span>
+            <div class="t5"><span class="n">${i + 2}</span>${art(trackCovers.get(e.key))}<span class="name">${esc(e.track)}</span>
             <span class="meta">${fmtInt(e.plays)} plays</span></div>`).join('')}
         </div>`);
     }
@@ -207,10 +214,10 @@ const Wrapped = (() => {
 
     // progressively enhance the cards with covers once they load — CAA sends
     // CORS headers on every hop, so drawing them doesn't taint the canvas
-    loadCovers(covers).then(imgs => {
-      if (!imgs.size || !document.body.contains(shareSlide)) return;
-      canvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'story', imgs);
-      squareCanvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'square', imgs);
+    Promise.all([loadCovers(covers), loadCovers(trackCovers)]).then(([artistImgs, trackImgs]) => {
+      if ((!artistImgs.size && !trackImgs.size) || !document.body.contains(shareSlide)) return;
+      canvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'story', artistImgs, trackImgs);
+      squareCanvas = drawShareCard(a, topArtists, top(a.byTrack, 'plays', 5), p, 'square', artistImgs, trackImgs);
       preview.src = canvas.toDataURL('image/png');
       refreshShareFile();
     });
@@ -373,9 +380,9 @@ const Wrapped = (() => {
   }
 
   /* ---- share cards: 1080×1920 story, 1080×1080 square ----
-   * covers: Map artist -> preloaded CORS-safe Image (optional) */
-  function drawShareCard(a, topArtists, topTracks, p, format = 'story', covers = null) {
-    if (format === 'square') return drawSquareCard(a, topArtists, topTracks, p, covers);
+   * covers / trackCovers: Maps of preloaded CORS-safe Images (optional) */
+  function drawShareCard(a, topArtists, topTracks, p, format = 'story', covers = null, trackCovers = null) {
+    if (format === 'square') return drawSquareCard(a, topArtists, topTracks, p, covers, trackCovers);
     const W = 1080, H = 1920;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
@@ -434,7 +441,7 @@ const Wrapped = (() => {
       });
     };
     drawList('Top artists', topArtists.map(e => e.key), 90, 450, covers && topArtists.map(e => covers.get(e.key)));
-    drawList('Top songs', topTracks.map(e => e.track), 560, 450);
+    drawList('Top songs', topTracks.map(e => e.track), 560, 450, trackCovers && topTracks.map(e => trackCovers.get(e.key)));
 
     // personality
     const py = 1250;
@@ -467,7 +474,7 @@ const Wrapped = (() => {
     return canvas;
   }
 
-  function drawSquareCard(a, topArtists, topTracks, p, covers = null) {
+  function drawSquareCard(a, topArtists, topTracks, p, covers = null, trackCovers = null) {
     const W = 1080, H = 1080;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
@@ -521,7 +528,7 @@ const Wrapped = (() => {
       });
     };
     drawList('Top artists', topArtists.map(e => e.key), 90, 450, covers && topArtists.map(e => covers.get(e.key)));
-    drawList('Top songs', topTracks.map(e => e.track), 560, 450);
+    drawList('Top songs', topTracks.map(e => e.track), 560, 450, trackCovers && topTracks.map(e => trackCovers.get(e.key)));
 
     ctx.textAlign = 'center';
     ctx.fillStyle = MUTED;
