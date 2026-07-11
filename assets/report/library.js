@@ -66,20 +66,17 @@
     const albumCand = coverageSlice(albumEntries.filter(e => e.plays >= 2), 0.95, 40, 750);
     const pendA = new Set(Enrich.pendingArtists(artistCand.map(e => e.key)));
     const pendAl = new Set(Enrich.pendingAlbums(albumCand.map(e => [e.artist, e.album])).map(p => p.join('\t')));
-    // portraits are one lookup each, so only the top of the artist list
-    const portraits = Enrich.pendingPortraits(artistCand.slice(0, 60).map(e => e.key));
     const queue = [
       ...artistCand.filter(e => pendA.has(e.key)).map(e => ({ type: 'artist', name: e.key })),
       ...albumCand.filter(e => pendAl.has(`${e.artist}\t${e.album}`)).map(e => ({ type: 'album', artist: e.artist, album: e.album })),
-      ...portraits.map(name => ({ type: 'portrait', name })),
     ];
-    return { queue, artistCount: pendA.size, albumCount: pendAl.size, portraitCount: portraits.length };
+    return { queue, artistCount: pendA.size, albumCount: pendAl.size };
   }
 
   /* opt-in MusicBrainz enrichment: the progress bar / improve-coverage CTA,
    * appended to a section that already shows enriched data (or nowhere —
    * empty-state sections render their own CTA via enrichEmptyState) */
-  function enrichBar(sectionEl, { queue, artistCount, albumCount, portraitCount }) {
+  function enrichBar(sectionEl, { queue, artistCount, albumCount }) {
     if (!sectionEl) return;
     if (!queue.length && !Enrich.state.running) return;
 
@@ -95,13 +92,13 @@
         <button class="chip" id="enrichStop">Stop</button>`;
       bar.querySelector('#enrichStop').addEventListener('click', () => Enrich.stop());
     } else {
-      const mins = Enrich.estimateMinutes(artistCount, albumCount, portraitCount);
+      const mins = Enrich.estimateMinutes(artistCount, albumCount);
       bar.innerHTML = `<button class="chip enrich-start">Improve coverage</button>
         <span class="enrich-note">${s.error ? `<b>${esc(s.error)}</b> ` : ''}Looks up ${fmtInt(artistCount)} more artists
         and ${fmtInt(albumCount)} more albums on MusicBrainz, most-played first in batched requests
-        (about ${mins} min; runs in the background), pulls album covers from the Cover Art Archive,
-        and portraits for your top artists from Wikimedia. Only artist and album names are sent;
-        nothing about your listening leaves the browser. Stop or resume anytime.</span>`;
+        (about ${mins} min; runs in the background), and pulls album covers from the Cover Art Archive.
+        Only artist and album names are sent; nothing about your listening leaves the browser.
+        Stop or resume anytime.</span>`;
       bar.querySelector('.enrich-start').addEventListener('click', () => Enrich.run(queue));
     }
   }

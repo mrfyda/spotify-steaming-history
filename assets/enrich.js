@@ -17,9 +17,10 @@
  * Album matches also keep their release-group MBID: the Cover Art Archive
  * serves cover images straight off that id (no extra lookups — the browser
  * fetches covers lazily as rows scroll into view, only after the user opted
- * in to enrichment). The top artists additionally get a portrait, resolved
- * through MusicBrainz url relations to a Wikimedia image — one lookup per
- * artist, so only the top of the list gets one.
+ * in to enrichment). Artist entries keep their MBID too, in case a future
+ * lookup wants it. (Artist portraits were tried and dropped: relations
+ * aren't in search results, so each portrait cost 1-2 uncacheable requests
+ * at the 1/s limit, and Wikimedia artist photos are mostly live shots.)
  */
 const Enrich = (() => {
 
@@ -152,33 +153,6 @@ const Enrich = (() => {
   }
 
   const albumKey = (artist, album) => artist + '\u0000' + album;
-  /* ---- artist portraits: MusicBrainz url relations -> Wikimedia ----
-   * One lookup per artist (relations aren't in search results), so only the
-   * top handful of artists get portraits. Result lands in meta.a — the same
-   * field every view already renders — and meta.p marks the attempt so
-   * artists without a portrait aren't retried forever. */
-
-  const commonsThumb = fileUrl => {
-    const m = String(fileUrl).match(/\/wiki\/File:(.+)$/);
-    return m ? `https://commons.wikimedia.org/wiki/Special:FilePath/${m[1]}?width=250` : null;
-  };
-
-  async function fetchPortrait(name) {
-    const mbid = artists[name]?.m;
-    if (!mbid) return { p: 0 }; // artist never matched — nothing to look up
-    const data = await getJson(`https://musicbrainz.org/ws/2/artist/${mbid}?inc=url-rels&fmt=json`);
-    const rels = data.relations || [];
-    const direct = commonsThumb(rels.find(r => r.type === 'image')?.url?.resource);
-    if (direct) return { a: direct, p: 1 };
-    const qid = rels.find(r => r.type === 'wikidata')?.url?.resource?.match(/Q\d+$/)?.[0];
-    if (qid) {
-      const wd = await getJson(`https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${qid}&property=P18&format=json&origin=*`);
-      const file = wd.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
-      if (file) return { a: `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=250`, p: 1 };
-    }
-    return { p: 0 };
-  }
-
   const get = name => artists[name];
   const getAlbum = (artist, album) => albums[albumKey(artist, album)];
   const albumArtUrl = (artist, album) => {
@@ -186,10 +160,6 @@ const Enrich = (() => {
     return i ? `https://coverartarchive.org/release-group/${i}/front-250` : null;
   };
   const pendingArtists = names => names.filter(n => !(n in artists));
-  // portrait not yet attempted (meta.p records the attempt either way);
-  // artists still awaiting their first lookup qualify too — by the time
-  // portraits run, the artist batches have already given them an MBID
-  const pendingPortraits = names => names.filter(n => artists[n]?.p === undefined);
   // an album cached with a year but no MBID predates cover support — offer it
   // for re-lookup; {} entries stay settled (looked up, no match)
   const pendingAlbums = pairs => pairs.filter(([ar, al]) => {
@@ -198,9 +168,8 @@ const Enrich = (() => {
   });
 
   /** Rough request count → minutes, for the button's ETA. */
-  function estimateMinutes(artistCount, albumCount, portraitCount = 0) {
-    const requests = Math.ceil(artistCount / ARTIST_BATCH) + Math.ceil(albumCount / ALBUM_BATCH)
-      + Math.ceil(portraitCount * 1.3); // portraits are individual, some need a wikidata hop
+  function estimateMinutes(artistCount, albumCount) {
+    const requests = Math.ceil(artistCount / ARTIST_BATCH) + Math.ceil(albumCount / ALBUM_BATCH);
     return Math.max(1, Math.ceil((requests * 1.35 * (DELAY / 1000)) / 60)); // ~35% headroom for fallbacks
   }
 
@@ -231,9 +200,7 @@ const Enrich = (() => {
     notify();
 
     // alternate artist and album batches so both charts fill in together,
-    // preserving the queue's most-played-first order within each type;
-    // portraits go last (they're polish, and they need the artist MBIDs
-    // the artist batches produce)
+    // preserving the queue's most-played-first order within each type
     const artistQ = queue.filter(i => i.type === 'artist');
     const albumQ = queue.filter(i => i.type === 'album');
     const batches = [];
@@ -241,33 +208,11 @@ const Enrich = (() => {
       if (a < artistQ.length) { batches.push({ type: 'artist', items: artistQ.slice(a, a + ARTIST_BATCH) }); a += ARTIST_BATCH; }
       if (l < albumQ.length) { batches.push({ type: 'album', items: albumQ.slice(l, l + ALBUM_BATCH) }); l += ALBUM_BATCH; }
     }
-    for (const item of queue.filter(i => i.type === 'portrait')) batches.push({ type: 'portrait', items: [item] });
 
     let consecutiveFailures = 0;
     outer:
     for (const batch of batches) {
       if (state.stopRequested) break;
-
-      if (batch.type === 'portrait') {
-        const name = batch.items[0].name;
-        const meta = await attempt(() => fetchPortrait(name));
-        if (meta == null) {
-          consecutiveFailures++; // stays unattempted: retried next run
-        } else {
-          consecutiveFailures = 0;
-          artists[name] = { ...artists[name], ...meta };
-          persist();
-        }
-        state.done++;
-        notify();
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          state.error = 'MusicBrainz lookups keep failing — the network may be blocking them, or the service is down. Progress is saved; try again later.';
-          break;
-        }
-        await pause(DELAY);
-        continue;
-      }
-
       const found = await attempt(() => batch.type === 'artist'
         ? fetchArtistBatch(batch.items.map(i => i.name))
         : fetchAlbumBatch(batch.items));
@@ -328,5 +273,5 @@ const Enrich = (() => {
   const stop = () => { state.stopRequested = true; };
   const setOnUpdate = cb => { onUpdate = cb; };
 
-  return { get, getAlbum, albumArtUrl, pendingArtists, pendingAlbums, pendingPortraits, estimateMinutes, run, stop, state, setOnUpdate };
+  return { get, getAlbum, albumArtUrl, pendingArtists, pendingAlbums, estimateMinutes, run, stop, state, setOnUpdate };
 })();

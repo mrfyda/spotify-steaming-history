@@ -341,6 +341,25 @@ td.rank { color: var(--text-muted); width: 34px; font-variant-numeric: tabular-n
 .top5 .t5 .name { font-size: clamp(1.05rem, 3vw, 1.4rem); font-weight: 650; letter-spacing: -.01em; overflow-wrap: anywhere; }
 .top5 .t5 .meta { color: var(--text-muted); font-size: .9rem; flex: none; margin-left: auto; padding-left: 10px; }
 .top5 .t5:first-child .name { color: var(--accent-ink); }
+.top5 .t5 .t5-sub { display: block; font-size: .8rem; font-weight: 450; color: var(--text-muted); }
+
+/* wrapped: top-song quiz */
+.quiz { display: grid; gap: 10px; max-width: 440px; margin: 22px auto 0; }
+.quiz-opt {
+  font: inherit; text-align: left; cursor: pointer; padding: 12px 16px;
+  background: var(--surface-2); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 12px;
+}
+.quiz-opt b { display: block; font-weight: 650; }
+.quiz-opt span { color: var(--text-muted); font-size: .85rem; }
+.quiz-opt:hover:not(:disabled) { border-color: var(--accent); }
+.quiz-opt:disabled { cursor: default; opacity: .75; }
+.quiz-opt--yes { border-color: var(--accent); background: var(--dz-hover); opacity: 1 !important; }
+.quiz-opt--no { border-color: var(--err-border); background: var(--err-bg); }
+
+/* wrapped: artist sprint bump chart */
+.sprint { max-width: 620px; margin: 22px auto 0; }
+.sprint svg { width: 100%; height: auto; display: block; }
 
 .year-pick { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 24px; }
 .year-pick .chip { font-size: .98rem; padding: 8px 20px; }

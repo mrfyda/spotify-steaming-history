@@ -54,15 +54,16 @@ const Wrapped = (() => {
       <p class="s-sub">of music${a.podcastMs > 0 ? ' and podcasts' : ''} in ${selectedYear}.
       That's <b>${fmtMsLong(a.totalMs)}</b>, spread across ${fmtInt(a.activeDays)} different days.</p>`);
 
+    const art = url => url
+      ? `<img class="w-art" src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`
+      : '';
+
     /* --- top artist --- */
     const topArtists = top(a.byArtist, 'ms', 5);
     const covers = artistCovers(a, topArtists);
     if (topArtists.length) {
       const t1 = topArtists[0];
       const share = a.musicMs ? t1.ms / a.musicMs : 0;
-      const art = url => url
-        ? `<img class="w-art" src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`
-        : '';
       slide('c', `
         <div class="s-lead">Nobody came close to</div>
         ${covers.get(t1.key) ? `<img class="w-hero-art" src="${esc(covers.get(t1.key))}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
@@ -79,8 +80,46 @@ const Wrapped = (() => {
         </div>`);
     }
 
-    /* --- top tracks --- */
+    /* --- artist sprint: the monthly race for #1 (Wrapped 2025's Top Artist
+     * Sprint) — each line is an artist's rank among your top 5, per month --- */
+    const sprint = sprintSvg(topArtists);
+    if (sprint) {
+      slide('b', `
+        <div class="s-lead">The race for #1, month by month.</div>
+        ${sprint}
+        <p class="s-sub">Each line is one of your top five artists, ranked by that month's listening.</p>`);
+    }
+
+    /* --- quiz before the reveal (Wrapped 2025's Top Song Quiz) --- */
     const topTracks = top(a.byTrack, 'plays', 5);
+    const quizPool = top(a.byTrack, 'plays', 8);
+    if (quizPool.length >= 4) {
+      const decoys = quizPool.slice(1).sort(() => Math.random() - 0.5).slice(0, 3);
+      const options = [quizPool[0], ...decoys].sort(() => Math.random() - 0.5);
+      const quiz = slide('a', `
+        <div class="s-lead">Before the reveal — which song defined your year?</div>
+        <div class="quiz">
+          ${options.map((t, i) => `
+            <button class="quiz-opt" data-i="${i}" data-ok="${t === quizPool[0] ? 1 : 0}">
+              <b>${esc(t.track)}</b><span>${esc(t.artist)}</span>
+            </button>`).join('')}
+        </div>
+        <p class="s-sub" id="quizResult" hidden></p>`);
+      quiz.querySelectorAll('.quiz-opt').forEach(btn => btn.addEventListener('click', () => {
+        quiz.querySelectorAll('.quiz-opt').forEach(b => {
+          b.disabled = true;
+          if (b.dataset.ok === '1') b.classList.add('quiz-opt--yes');
+          else if (b === btn) b.classList.add('quiz-opt--no');
+        });
+        const res = quiz.querySelector('#quizResult');
+        res.hidden = false;
+        res.innerHTML = btn.dataset.ok === '1'
+          ? `Nailed it. <b>${fmtInt(quizPool[0].plays)} plays</b> — keep scrolling for the damage.`
+          : `It was “<b>${esc(quizPool[0].track)}</b>” — ${fmtInt(quizPool[0].plays)} plays. Scroll for the full story.`;
+      }));
+    }
+
+    /* --- top tracks --- */
     if (topTracks.length) {
       const t1 = topTracks[0];
       slide('e', `
@@ -91,6 +130,44 @@ const Wrapped = (() => {
           ${topTracks.slice(1).map((e, i) => `
             <div class="t5"><span class="n">${i + 2}</span><span class="name">${esc(e.track)}</span>
             <span class="meta">${fmtInt(e.plays)} plays</span></div>`).join('')}
+        </div>`);
+    }
+
+    /* --- top albums (Wrapped 2025 added these; ours carry covers) --- */
+    const topAlbums = top(a.byAlbum, 'ms', 5);
+    if (topAlbums.length >= 3) {
+      slide('c', `
+        <div class="s-lead">The albums you kept coming back to.</div>
+        <div class="top5">
+          ${topAlbums.map((e, i) => `
+            <div class="t5"><span class="n">${i + 1}</span>${art(Enrich.albumArtUrl(e.artist, e.album))}
+            <span class="name">${esc(e.album)}<span class="t5-sub">${esc(e.artist)}</span></span>
+            <span class="meta">${fmtMs(e.ms)}</span></div>`).join('')}
+        </div>`);
+    }
+
+    /* --- listening age (Wrapped 2025) — from enriched album release years --- */
+    const age = listeningAge(a);
+    if (age) {
+      const years = a.year - age.median;
+      slide('d', `
+        <div class="s-lead">Half your listening is music from</div>
+        <div class="s-hero">${age.median} or earlier</div>
+        <p class="s-sub">${years <= 2
+          ? 'You live firmly in the present — the ink is barely dry on your library.'
+          : `On a typical day you were listening <b>${fmtInt(years)} years</b> into the past.`}
+        Based on the release years of ${fmtPct(age.share)} of your album listening.</p>`);
+    }
+
+    /* --- top podcasts --- */
+    const topShows = top(a.byShow, 'ms', 5);
+    if (topShows.length >= 2) {
+      slide('e', `
+        <div class="s-lead">Between the songs, the talkers.</div>
+        <div class="top5">
+          ${topShows.map((e, i) => `
+            <div class="t5"><span class="n">${i + 1}</span><span class="name">${esc(e.key)}<span class="t5-sub">${e.kind === 'audiobook' ? 'audiobook' : 'podcast'}</span></span>
+            <span class="meta">${fmtMs(e.ms)}</span></div>`).join('')}
         </div>`);
     }
 
@@ -176,6 +253,79 @@ const Wrapped = (() => {
       title: `My ${selectedYear} in music`,
       text: `My ${selectedYear} in music. Make yours at ${location.origin + location.pathname}`,
     }).catch(() => {}));
+  }
+
+  /* bump chart of the top five artists' monthly ranks — a line per artist,
+   * a point only for months they were actually played. Needs a few active
+   * months and at least 3 artists to be a race at all. */
+  function sprintSvg(topArtists) {
+    const runners = topArtists.filter(e => e.series);
+    if (runners.length < 3) return null;
+    const months = runners[0].series.length;
+    const activeMonths = [...Array(months).keys()].filter(m => runners.some(e => (e.series[m] || 0) > 0));
+    if (activeMonths.length < 4) return null;
+
+    const lastActive = Math.max(...activeMonths); // an in-progress year ends where the data does
+    const W = 620, TOP = 16, LX = 44, RX = W - 20, ROW = 30;
+    const H = TOP + runners.length * ROW + 34;
+    const x = m => LX + (m / Math.max(1, lastActive)) * (RX - LX);
+    const y = rank => TOP + rank * ROW + ROW / 2;
+    const COLORS = Charts.theme().cat;
+
+    // rank per artist per month (null when not played that month)
+    const pos = runners.map(() => new Array(months).fill(null));
+    for (let m = 0; m < months; m++) {
+      [...runners.keys()]
+        .sort((i, j) => (runners[j].series[m] || 0) - (runners[i].series[m] || 0))
+        .forEach((idx, rank) => { if ((runners[idx].series[m] || 0) > 0) pos[idx][m] = rank; });
+    }
+
+    const lines = runners.map((e, i) => {
+      const pts = [];
+      let seg = [];
+      for (let m = 0; m < months; m++) {
+        if (pos[i][m] == null) { if (seg.length > 1) pts.push(seg); seg = []; continue; }
+        seg.push(`${x(m).toFixed(1)},${y(pos[i][m]).toFixed(1)}`);
+      }
+      if (seg.length > 1) pts.push(seg);
+      const dots = pos[i].map((r, m) => r == null ? '' :
+        `<circle cx="${x(m).toFixed(1)}" cy="${y(r).toFixed(1)}" r="3.5" fill="${COLORS[i]}"/>`).join('');
+      return pts.map(seg =>
+        `<polyline points="${seg.join(' ')}" fill="none" stroke="${COLORS[i]}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" opacity=".85"/>`
+      ).join('') + dots;
+    }).join('');
+
+    const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+    const labels = [...Array(lastActive + 1).keys()].map(m =>
+      `<text x="${x(m).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="${Charts.theme().muted}">${MONTHS[m] || m + 1}</text>`).join('');
+    const rankLabels = runners.map((_, r) =>
+      `<text x="${LX - 14}" y="${y(r) + 4}" text-anchor="middle" font-size="11" fill="${Charts.theme().muted}">#${r + 1}</text>`).join('');
+    const legend = runners.map((e, i) =>
+      `<span><i style="background:${COLORS[i]}"></i>${esc(e.key)}</span>`).join('');
+
+    return `<div class="sprint"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Monthly rank of your top artists">
+      ${rankLabels}${lines}${labels}</svg>
+      <div class="chart-legend" style="justify-content:center">${legend}</div></div>`;
+  }
+
+  /* weighted-median release year of the year's album listening —
+   * only meaningful once enrichment covers a decent share of it */
+  function listeningAge(a) {
+    const dated = [];
+    let covered = 0, total = 0;
+    for (const e of top(a.byAlbum, 'ms')) {
+      total += e.ms;
+      const y = Enrich.getAlbum(e.artist, e.album)?.y;
+      if (y) { dated.push([y, e.ms]); covered += e.ms; }
+    }
+    if (!total || covered / total < 0.3 || dated.length < 10) return null;
+    dated.sort((p, q) => p[0] - q[0]);
+    let acc = 0;
+    for (const [year, ms] of dated) {
+      acc += ms;
+      if (acc >= covered / 2) return { median: year, share: covered / total };
+    }
+    return null;
   }
 
   /* covers for the top artists: their own artwork if the old cache has it,
